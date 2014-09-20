@@ -1,0 +1,7 @@
+name: plink
+description: A pub package 
+dependencies:
+  u_til:
+    path: /home/axel/dart/u_til
+dev_dependencies:
+  unittest: any
