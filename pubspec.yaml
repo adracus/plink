@@ -3,5 +3,6 @@ description: A pub package
 dependencies:
   u_til:
     path: /home/axel/dart/u_til
+  postgresql: ">=0.2.14 <0.3.0"
 dev_dependencies:
   unittest: any

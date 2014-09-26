@@ -6,7 +6,7 @@ const ModelRepository REPO = const ModelRepository();
 class ModelRepository {
   static Map<Symbol, ModelSchema> MODELS = parseModels();
   static DatabaseAdapter adapter = new MemoryAdapter();
-  static Map<Symbol, bool> _existingTables = {};
+  static Map<String, bool> _existingTables = {};
   
   const ModelRepository();
   
@@ -23,15 +23,19 @@ class ModelRepository {
   Future<Model> find(Type type, int id) =>
       MODELS[reflectType(type).simpleName].find(id);
   
-  static Future ensureTableExistence(Symbol sym) {
-    if (_existingTables[sym] == true) return new Future.value();
-    return adapter.hasTable($(sym).name).then((res) {
-      if (res) return new Future.value();
-      return adapter.createTable(MODELS[sym].tableSchema).then((_) {
-        _existingTables[sym] = true;
-        return new Future.value();
-      });
-    });
+  static Future ensureTableExistence(TableSchema schema) {
+    if (_existingTables[schema.tableName] == true) return new Future.value();
+    Future f = schema.relations.length == 0 ? new Future.value() :
+      Future.wait(schema.relations.values.map(ensureTableExistence));
+    return f.then((_) =>
+      adapter.hasTable(schema.tableName).then((res) {
+        if (res) return new Future.value();
+        return adapter.createTable(schema).then((_) {
+          _existingTables[schema.tableName] = true;
+          return new Future.value();
+        });
+      })
+    );
   }
   
   static Model updateModelWithValues(model, Map<String, dynamic> values) {
@@ -41,12 +45,33 @@ class ModelRepository {
   }
   
   Future<Model> save(Model model) {
-    if (model.created_at == null) model.created_at = new DateTime.now();
+    bool isPersistedModel = true;
+    if (model.created_at == null) {
+      model.created_at = new DateTime.now();
+      isPersistedModel = false;
+    }
     model.updated_at = new DateTime.now();
+    return isPersistedModel ? update(model) : create(model);
+  }
+  
+  Future<Model> create(Model model) {
+    model.beforeCreate();
     var sym = reflect(model).type.simpleName;
     var values = MODELS[sym].extractValues(model);
-    return ensureTableExistence(sym).then((_) {
+    return ensureTableExistence(MODELS[sym].tableSchema).then((_) {
       return adapter.saveToTable(MODELS[sym].tableName,
+        $(values).transformKey((key) => $(key.simpleName).name))
+          .then((resValues) =>
+              updateModelWithValues(model, resValues));
+    });
+  }
+  
+  Future<Model> update(Model model) {
+    model.beforeUpdate();
+    var sym = reflect(model).type.simpleName;
+    var values = MODELS[sym].extractValues(model);
+    return ensureTableExistence(MODELS[sym].tableSchema).then((_) {
+      return adapter.updateToTable(MODELS[sym].tableName,
         $(values).transformKey((key) => $(key.simpleName).name))
           .then((resValues) => updateModelWithValues(model, resValues));
     });
@@ -72,14 +97,20 @@ class ModelSchema {
   
   final ClassMirror mirror;
   final Map<Symbol, VariableMirror> fields;
+  final Map<Symbol, VariableMirror> relations;
   
   ModelSchema(ClassMirror mirror)
-      : fields = $($(mirror).fields).retainWhereValue((VariableMirror val) =>
-          _isPrimitive(val.type.reflectedType)),
-        this.mirror = mirror;
+      : fields = _parseFields(mirror),
+        relations = $($(mirror).fields).retainWhereValue((VariableMirror val) =>
+            val.type.isAssignableTo(reflectType(List))),
+        mirror = mirror;
   
   Symbol get name => mirror.simpleName;
-  String get tableName => $(name).name;
+  String get tableName => getTableName($(name).name);
+  
+  static Map<Symbol, VariableMirror> _parseFields(ClassMirror mirror) =>
+      $(mirror.declarations).retainWhereValue((DeclarationMirror dec) =>
+          dec is VariableMirror && !_shouldBeIgnored(mirror));
   
   Future<Model> find(int id) {
     return ModelRepository.adapter.findById($(name).name, id)
@@ -110,19 +141,45 @@ class ModelSchema {
   Map<VariableMirror, dynamic> extractValues(Model instance) {
     var instanceMirror = reflect(instance);
     var result = {};
-    fields.forEach((sym, mirr) =>
-        result[mirr] = instanceMirror.getField(sym).reflectee);
+    fields.forEach((sym, mirr) {
+      var field = instanceMirror.getField(sym).reflectee;
+      if (field != null) result[mirr] = field;
+    });
     return result;
   }
   
   static bool _isPrimitive(Type t) => PRIMITIVES.contains(t);
   
-  TableSchema get tableSchema =>
-      new TableSchema(tableName, $(fields).transform((key) => $(key).name,
-        getVariableSchema));
+  static bool _isPrimitiveList(VariableMirror mirr) {
+    var typeArgs = mirr.type.typeArguments;
+    return typeArgs.length == 1 && _isPrimitive(typeArgs.single.reflectedType);
+  }
   
-  VariableSchema getVariableSchema(VariableMirror mirror) =>
-      new VariableSchema($(mirror.simpleName).name, [], []);
+  Map<String, TableSchema> parseRelations() {
+    return $(relations).transform((key) => $(key).name, createRelationTable);
+  }
+  
+  TableSchema createRelationTable(VariableMirror mirr) {
+    if (_isPrimitiveList(mirr)) return createPrimitiveRelation(mirr);
+    throw new ArgumentError("Non primitive relations have not been implemented");
+  }
+  
+  static String getTableName(name) {
+    var str = name is Symbol ? $(name).name : name;
+    return str.replaceAll(".", "_");
+  }
+  
+  TableSchema createPrimitiveRelation(VariableMirror mirr) {
+    var tableName = getTableName(mirr.qualifiedName);
+    var varSchema = new VariableSchema(tableName,
+        $(mirr.type.simpleName).name, [], []);
+    return new TableSchema(tableName, {varSchema.name: varSchema});
+  }
+  
+  TableSchema get tableSchema {
+    return new TableSchema(tableName, $(fields).transform((key) => $(key).name,
+      (v) => new VariableSchema.fromMirror(v)), parseRelations());
+  }
   
   String toString() => "Schema of " + $(name).name;
 }
