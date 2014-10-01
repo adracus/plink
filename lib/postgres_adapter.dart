@@ -8,10 +8,25 @@ import 'package:postgresql/postgresql.dart';
 class PostgresAdapter implements DatabaseAdapter {
   final Uri _uri;
   
+  
   PostgresAdapter(uri)
       : _uri = uri is Uri ? uri : Uri.parse(uri);
   
+  
   Future<Connection> obtainConnection() => connect(_uri.toString());
+  
+  
+  Future<int> _execute(String sql, [values]) =>
+      obtainConnection().then((conn) {
+    return conn.execute(sql, values).whenComplete(() => conn.close());
+  });
+  
+  
+  Future<List<Row>> _query(String sql, [values]) =>
+      obtainConnection().then((conn) {
+    return conn.query(sql, values).toList().whenComplete(() => conn.close());
+  });
+  
   
   Future<bool> hasTable(String tableName) {
     return obtainConnection().then((conn) {
@@ -27,30 +42,31 @@ class PostgresAdapter implements DatabaseAdapter {
     });
   }
   
-  Future createTable(TableSchema schema) {
-    var variables = schema.structure.values.map(variableForCreate).join(", ");
-    return obtainConnection().then((conn) {
-      return conn.execute("CREATE TABLE ${schema.tableName} ($variables)")
-                 .then((val) => new Future.value())
-                 .whenComplete(() => conn.close());
-    });
+  
+  Future createTable(String tableName, List<FieldSchema> fields) {
+    var variables = fields.map(variableForCreate).join(", ");
+    return _execute("CREATE TABLE $tableName ($variables)").then((_) =>
+        new Future.value());
   }
   
-  String getType(VariableSchema variable) {
+  
+  String getType(FieldSchema variable) {
     if (variable.constraints.any((elem) =>
         elem is AutoIncrement)) return "serial";
     if (variable.type == "string") return "text";
     if (variable.type == "int") return "integer";
     if (variable.type == "double") return "double precision";
     if (variable.type == "datetime") return "timestamp";
-    return "";
+    throw new UnsupportedError("Type '${variable.type}' not supported");
   }
   
-  String variableForCreate(VariableSchema variable) {
+  
+  String variableForCreate(FieldSchema variable) {
     var type = getType(variable);
     return ("${variable.name} $type " +
         variable.constraints.map(constraintsForCreate).join(" ")).trim();
   }
+  
   
   static String constraintsForCreate(constraint) {
     if (constraint is PrimaryKey) return "primary key";
@@ -58,13 +74,6 @@ class PostgresAdapter implements DatabaseAdapter {
     return "";
   }
   
-  Future<Map<String, dynamic>> findById(String tableName, int id) {
-    return obtainConnection().then((conn) {
-      return conn.query("SELECT * FROM $tableName WHERE id=@id", {"id": id})
-                 .toList().then((rows) => transformRows(rows).first)
-                 .whenComplete(() => conn.close());
-    });
-  }
   
   Future<List<Map<String, dynamic>>> all(String tableName) {
     return obtainConnection().then((conn) {
@@ -74,13 +83,13 @@ class PostgresAdapter implements DatabaseAdapter {
     });
   }
   
-  Future delete(String tableName, int id) {
-    return obtainConnection().then((conn) {
-      return conn.execute("DELETE FROM $tableName WHERE id=@id", {"id": id})
-                 .then((res) => new Future.value())
-                 .whenComplete(() => conn.close());
-    });
+  
+  Future delete(String tableName, Map<String, dynamic> condition) {
+    return _execute("DELETE FROM $tableName WHERE " +
+        "${generateWhereClause(condition.keys)}", condition)
+          .then((res) => new Future.value());
   }
+  
   
   Future dropTable(String tableName) {
     return obtainConnection().then((conn) {
@@ -90,57 +99,47 @@ class PostgresAdapter implements DatabaseAdapter {
     });
   }
   
-  Future<List<Map<String, dynamic>>> findWhere(String tableName,
-      Map<String, dynamic> condition) {
-    List conditions = $(condition).flatten((k, v) => "$k = @$k");
-    return obtainConnection().then((conn) {
-      conn.query("SELECT * FROM $tableName WHERE ${conditions.join(" AND ")}",
-          condition).toList().then(transformRows)
-          .whenComplete(() => conn.close());
-    });
-  }
   
-  List<Map<String, dynamic>> transformRows(List<Row> rows) {
-    var result = [];
-    rows.forEach((row) {
-      var transformed = {};
-      row.forEach((name, value) => transformed[name] = value);
-      result.add(transformed);
-    });
+  Future<List<Map<String, dynamic>>> findWhere(String tableName,
+      Map<String, dynamic> condition) =>
+      _query("SELECT * FROM $tableName WHERE " +
+          generateWhereClause(condition.keys), condition).then(transformRows);
+  
+  
+  List<Map<String, dynamic>> transformRows(List<Row> rows) =>
+      rows.map(rowToMap).toList();
+  
+  
+  Map<String, dynamic> rowToMap(Row row) {
+    var result = {};
+    row.forEach((name, value) => result[name] = value);
     return result;
   }
+  
+  
+  String generateWhereClause(Iterable<String> keyNames) =>
+      keyNames.map((k) => "$k = @$k").join(" AND ");
+  
   
   Future<Map<String, dynamic>> saveToTable(String tableName,
       Map<String, dynamic> values) {
     var keyNames = values.keys.join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
-    return obtainConnection().then((conn) {
-      return conn.query("INSERT INTO $tableName ($keyNames) VALUES " + 
-                          "($keySubs) RETURNING *", values).toList()
-                 .then((rows) => transformRows(rows).first)
-                 .whenComplete(() => conn.close());
-    });
+    return _query("INSERT INTO $tableName ($keyNames) VALUES " + 
+                          "($keySubs) RETURNING *", values)
+                 .then((rows) => transformRows(rows).first);
   }
+  
   
   Future<Map<String, dynamic>> updateToTable(String tableName,
-      Map<String, dynamic> values) {
+      Map<String, dynamic> values, Map<String, dynamic> condition) {
     var id = values.remove("id");
+    var substitutes = {}..addAll(values)..addAll(condition);
     var keyNames = values.keys.join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
-    return obtainConnection().then((conn) {
-      return conn.query("UPDATE $tableName SET ($keyNames) = ($keySubs)" +
-                          " WHERE id=$id RETURNING *", values).toList()
-                 .then((rows) => transformRows(rows).first)
-                 .whenComplete(() => conn.close());
-    });
+    return _query("UPDATE $tableName SET ($keyNames) = ($keySubs)" +
+                          " WHERE ${generateWhereClause(condition.keys)}" +
+                          "RETURNING *", substitutes)
+                 .then((rows) => transformRows(rows).first);
   }
-  
-  Future<TableSchema> describeTable(String tableName) =>
-      obtainConnection().then((conn) =>
-          conn.query("SELECT column_name, data_type "+
-                     "FROM information_schema.columns " +
-                     "WHERE table_name = '${tableName.toLowerCase()}'").toList()
-              .then(transformRows)
-              .then((rows) {
-      }).whenComplete(() => conn.close()));
 }
