@@ -67,7 +67,7 @@ class Model {
   Map<Symbol, VariableMirror> get _fields {
     if (Model._fieldCache[this.runtimeType] == null) {
       Model._fieldCache[this.runtimeType] =
-          $($(reflect(this).type).fields).retainWhereValue(_isFieldCandidate);
+          $($(reflect(this).type).fields).whereValue(_isFieldCandidate);
     }
     return Model._fieldCache[this.runtimeType];
   }
@@ -87,5 +87,10 @@ class Model {
   
   void setField(String name, value) {
     reflect(this).setField(new Symbol(name), value);
+  }
+  
+  
+  getField(String name) {
+    return reflect(this).getField(new Symbol(name)).reflectee;
   }
 }

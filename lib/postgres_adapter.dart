@@ -34,7 +34,7 @@ class PostgresAdapter implements DatabaseAdapter {
                    "SELECT table_name " +
                    "FROM information_schema.tables " +
                    "WHERE table_schema = 'public' " +
-                   "AND table_name = '${tableName.toLowerCase()}' "
+                   "AND table_name = '$tableName' "
                  ")")
           .toList().then((rows) {
         return rows.first[0];})
@@ -44,8 +44,8 @@ class PostgresAdapter implements DatabaseAdapter {
   
   
   Future createTable(String tableName, List<FieldSchema> fields) {
-    var variables = fields.map(variableForCreate).join(", ");
-    return _execute("CREATE TABLE $tableName ($variables)").then((_) =>
+    var variables = fields.map(columnsForCreate).join(", ");
+    return _execute("CREATE TABLE \"$tableName\" ($variables)").then((_) =>
         new Future.value());
   }
   
@@ -61,9 +61,9 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  String variableForCreate(FieldSchema variable) {
+  String columnsForCreate(FieldSchema variable) {
     var type = getType(variable);
-    return ("${variable.name} $type " +
+    return ("\"${variable.name}\" $type " +
         variable.constraints.map(constraintsForCreate).join(" ")).trim();
   }
   
@@ -77,7 +77,7 @@ class PostgresAdapter implements DatabaseAdapter {
   
   Future<List<Map<String, dynamic>>> all(String tableName) {
     return obtainConnection().then((conn) {
-      return conn.query("SELECT * FROM $tableName")
+      return conn.query("SELECT * FROM \"$tableName\"")
           .toList().then((rows) => transformRows(rows))
           .whenComplete(() => conn.close());
     });
@@ -85,25 +85,22 @@ class PostgresAdapter implements DatabaseAdapter {
   
   
   Future delete(String tableName, Map<String, dynamic> condition) {
-    return _execute("DELETE FROM $tableName WHERE " +
-        "${generateWhereClause(condition.keys)}", condition)
+    return _execute("DELETE FROM \"$tableName\" WHERE " +
+        "${generateAndClause(condition.keys)}", condition)
           .then((res) => new Future.value());
   }
   
   
   Future dropTable(String tableName) {
-    return obtainConnection().then((conn) {
-      return conn.execute("DROP TABLE $tableName")
-                 .then((res) => new Future.value())
-                 .whenComplete(() => conn.close());
-    });
+    return _execute("DROP TABLE \"$tableName\"")
+            .then((res) => new Future.value());
   }
   
   
   Future<List<Map<String, dynamic>>> findWhere(String tableName,
       Map<String, dynamic> condition) =>
-      _query("SELECT * FROM $tableName WHERE " +
-          generateWhereClause(condition.keys), condition).then(transformRows);
+      _query("SELECT * FROM \"$tableName\" WHERE " +
+          generateAndClause(condition.keys), condition).then(transformRows);
   
   
   List<Map<String, dynamic>> transformRows(List<Row> rows) =>
@@ -117,15 +114,19 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  String generateWhereClause(Iterable<String> keyNames) =>
-      keyNames.map((k) => "$k = @$k").join(" AND ");
+  String generateAndClause(Iterable<String> keyNames) =>
+      keyNames.map((k) => "\"$k\" = @$k").join(" AND ");
+  
+  
+  String generateOrClause(Iterable<String> keyNames) =>
+      keyNames.map((k) => "\"$k\" = @$k").join(" OR ");
   
   
   Future<Map<String, dynamic>> saveToTable(String tableName,
       Map<String, dynamic> values) {
-    var keyNames = values.keys.join(", ");
+    var keyNames = values.keys.map((key) => '"$key"').join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
-    return _query("INSERT INTO $tableName ($keyNames) VALUES " + 
+    return _query("INSERT INTO \"$tableName\" ($keyNames) VALUES " + 
                           "($keySubs) RETURNING *", values)
                  .then((rows) => transformRows(rows).first);
   }
@@ -137,8 +138,8 @@ class PostgresAdapter implements DatabaseAdapter {
     var substitutes = {}..addAll(values)..addAll(condition);
     var keyNames = values.keys.join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
-    return _query("UPDATE $tableName SET ($keyNames) = ($keySubs)" +
-                          " WHERE ${generateWhereClause(condition.keys)}" +
+    return _query("UPDATE \"$tableName\" SET ($keyNames) = ($keySubs) " +
+                          "WHERE ${generateAndClause(condition.keys)} " +
                           "RETURNING *", substitutes)
                  .then((rows) => transformRows(rows).first);
   }
