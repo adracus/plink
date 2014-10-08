@@ -1,6 +1,6 @@
 plink
 =====
-[![Build Status](https://drone.io/github.com/Adracus/plink/status.png)](https://drone.io/github.com/Adracus/plink/latest)
+[![Build Status](https://drone.io/github.com/Adracus/plink/status.png)](https://drone.io/github.com/Adracus/plink/latest) [![Coverage Status](https://coveralls.io/repos/Adracus/plink/badge.png)](https://coveralls.io/r/Adracus/plink)
 
 plink is a persistence link layer with minimal addition to your existing code.
 
