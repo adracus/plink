@@ -3,5 +3,6 @@ description: Plink is an orm which focuses on easy to use implementation.
 dependencies:
   u_til: ">=0.1.0 <0.2.0"
   postgresql: ">=0.2.14 <0.3.0"
+  logging: ">=0.9.2 <0.10.0"
 dev_dependencies:
   unittest: any

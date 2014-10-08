@@ -4,7 +4,7 @@ final ModelRepository REPO = new ModelRepository();
 
 
 class ModelRepository {
-  Map<Schema, bool> _existingTables = {};
+  Map<Schema, dynamic> _existingTables = {};
   final Map<Type, Schema> _schemes = _parseSchemes();
   DatabaseAdapter adapter = null; //new MemoryAdapter();
   
@@ -27,10 +27,19 @@ class ModelRepository {
   }
   
   
-  Future save(Model model) => getModelSchema(model).save(model);
+  Future<Model> save(Model model) => getModelSchema(model).save(model);
   
   
-  Future delete(Model model) => getModelSchema(model).delete(model);
+  Future<List<Model>> saveMany(List<Model> models) =>
+      Future.wait(models.map((model) => model.save()));
+  
+  
+  Future delete(Model model, {bool recursive: false}) =>
+      getModelSchema(model).delete(model, recursive: recursive);
+  
+  
+  Future deleteMany(List<Model> models, {bool recursive: false}) =>
+      Future.wait(models.map((model) => model.delete(recursive: recursive)));
   
   
   Future<Model> find(Type type, int id) => getModelSchema(type).find(id);
@@ -43,7 +52,8 @@ class ModelRepository {
   
   Future _checkTable(Schema schema) {
     if (_existingTables[schema] == true) return new Future.value();
-    return adapter.hasTable(schema.name).then((res) {
+    if (_existingTables[schema] is Future) return _existingTables[schema];
+    return _existingTables[schema] = adapter.hasTable(schema.name).then((res) {
       if (res) return new Future.value();
       var fs = [];
       fs..add(_createTableFromSchema(schema))

@@ -38,6 +38,7 @@ abstract class DatabaseAdapter {
         Map<String, dynamic> condition);
   Future<List<Map<String, dynamic>>> all(String tableName);
   Future delete(String tableName, Map<String, dynamic> condition);
+  Logger get logger;
 }
 
 

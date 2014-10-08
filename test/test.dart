@@ -5,22 +5,36 @@ import 'package:unittest/unittest.dart';
 class TestModel extends Model {
   String name;
   
+  TestName testName;
   List<int> accountNrs;
+  List<TestName> names;
+}
+
+class TestName extends Model {
+  TestName();
+  TestName.named(this.firstName, this.lastName);
+  String firstName;
+  String lastName;
 }
 
 main() {
   REPO.adapter =
       new PostgresAdapter("postgres://dartman:password@localhost:5432/dartbase");
   
+  REPO.adapter.logger.onRecord.listen((record) => print(record.message));
+  
   test("Model persisting", () {
     var model = new TestModel();
     model.name = "Test Name";
     model.accountNrs = [1, 2, 3];
+    model.names = [new TestName.named("That is", "A name")];
+    model.testName = new TestName.named("My Name", "Not known");
     model.save().then(expectAsync((TestModel saved) {
       expect(saved.name, equals("Test Name"));
       expect(saved.id, isNotNull);
-      print(saved.accountNrs);
-      saved.delete();
+      expect(saved.names.single.firstName, equals("That is"));
+      expect(saved.names.single.lastName, equals("A name"));
+      saved.delete(recursive: true);
     }));
   });
   
@@ -36,7 +50,7 @@ main() {
         expect(models.length, equals(1));
         expect(models.single.name, equals("Find me"));
         expect(models.single.accountNrs, equals([99, 199]));
-        models.single.delete();
+        models.single.delete(recursive: true);
       }));
     }));
   });
@@ -49,6 +63,7 @@ main() {
       saved.accountNrs.add(4);
       saved.save().then(expectAsync((savedAgain) {
         expect(savedAgain.accountNrs, equals([1, 3, 4]));
+        savedAgain.delete();
       }));
     }));
   });

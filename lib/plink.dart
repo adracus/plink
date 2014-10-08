@@ -1,12 +1,16 @@
 library plink;
 
 import 'dart:mirrors';
-import 'dart:async';
+import 'dart:async' show Future;
 import 'package:u_til/u_til.dart';
+import 'package:logging/logging.dart';
+
 
 part 'model_repository.dart';
 part 'model_schema.dart';
 part 'database_adapter.dart';
+part 'exceptions.dart';
+
 
 const Object ignore = const Object();
 const Symbol _empty = const Symbol("");
@@ -51,11 +55,11 @@ class Model {
   Future<Model> save() => REPO.save(this);
   
   
-  Future delete() {
+  Future delete({bool recursive: false}) {
     if (id == null)
       return new Future.error("Cannot delete non persistent model");
     beforeDelete();
-    return REPO.delete(this);
+    return REPO.delete(this, recursive: recursive);
   }
   
   

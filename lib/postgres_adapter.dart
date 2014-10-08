@@ -1,12 +1,16 @@
 library plink.postgres_adapter;
 
 import 'dart:async' show Future;
+import 'package:logging/logging.dart';
 import 'package:u_til/u_til.dart';
 import 'package:plink/plink.dart';
 import 'package:postgresql/postgresql.dart';
 
+
 class PostgresAdapter implements DatabaseAdapter {
   final Uri _uri;
+  
+  final Logger logger = new Logger("PostgresAdapter");
   
   
   PostgresAdapter(uri)
@@ -18,24 +22,32 @@ class PostgresAdapter implements DatabaseAdapter {
   
   Future<int> _execute(String sql, [values]) =>
       obtainConnection().then((conn) {
+    logger.info(() => "EXECUTE: ${substitute(sql, values)}");
     return conn.execute(sql, values).whenComplete(() => conn.close());
   });
   
   
   Future<List<Row>> _query(String sql, [values]) =>
       obtainConnection().then((conn) {
-    return conn.query(sql, values).toList().whenComplete(() => conn.close());
+    logger.info(() => "QUERY: ${substitute(sql, values)}");
+    return conn.query(sql, values).toList()
+        .catchError((e) {
+           print(e);
+         })
+        .whenComplete(() => conn.close());
   });
   
   
   Future<bool> hasTable(String tableName) {
     return obtainConnection().then((conn) {
-      return conn.query("SELECT EXISTS (" +
-                   "SELECT table_name " +
-                   "FROM information_schema.tables " +
-                   "WHERE table_schema = 'public' " +
-                   "AND table_name = '$tableName' "
-                 ")")
+      var stmnt = "SELECT EXISTS (" +
+          "SELECT table_name " +
+          "FROM information_schema.tables " +
+          "WHERE table_schema = 'public' " +
+          "AND table_name = '$tableName' "
+        ")";
+      logger.info(() => stmnt);
+      return conn.query(stmnt)
           .toList().then((rows) {
         return rows.first[0];})
           .whenComplete(() => conn.close());
