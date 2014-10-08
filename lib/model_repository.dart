@@ -52,9 +52,13 @@ class ModelRepository {
   
   Future _checkTable(Schema schema) {
     if (_existingTables[schema] == true) return new Future.value();
-    if (_existingTables[schema] is Future) return _existingTables[schema];
+    if (_existingTables[schema] is Future) // Check for table could be running
+      return _existingTables[schema].then((_) => _checkTable(schema));
     return _existingTables[schema] = adapter.hasTable(schema.name).then((res) {
-      if (res) return new Future.value();
+      if (res) {
+        _existingTables[schema] = true;
+        return new Future.value();
+      }
       var fs = [];
       fs..add(_createTableFromSchema(schema))
         ..addAll(schema.relations.map(_checkTable));
