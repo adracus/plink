@@ -5,14 +5,19 @@ import 'package:unittest/unittest.dart';
 class TestModel extends Model {
   String name;
   
+  TestModel(this.name);
+  
+  @defaultConstructor
+  TestModel.def();
+  
   TestName testName;
   List<int> accountNrs;
   List<TestName> names;
 }
 
 class TestName extends Model {
-  TestName();
-  TestName.named(this.firstName, this.lastName);
+  TestName([this.firstName, this.lastName]);
+  
   String firstName;
   String lastName;
 }
@@ -24,11 +29,10 @@ main() {
   REPO.adapter.logger.onRecord.listen((record) => print(record.message));
   
   test("Model persisting", () {
-    var model = new TestModel();
-    model.name = "Test Name";
+    var model = new TestModel("Test Name");
     model.accountNrs = [1, 2, 3];
-    model.names = [new TestName.named("That is", "A name")];
-    model.testName = new TestName.named("My Name", "Not known");
+    model.names = [new TestName("That is", "A name")];
+    model.testName = new TestName("My Name", "Not known");
     model.save().then(expectAsync((TestModel saved) {
       expect(saved.name, equals("Test Name"));
       expect(saved.id, isNotNull);
@@ -39,8 +43,7 @@ main() {
   });
   
   test("Model finding", () {
-    var model = new TestModel();
-    model.name = "Find me";
+    var model = new TestModel("Find me");
     model.accountNrs = [99, 199];
     model.save().then(expectAsync((TestModel saved) {
       expect(saved.name, equals("Find me"));
@@ -56,7 +59,7 @@ main() {
   });
   
   test("List persisting and changing", () {
-    var model = new TestModel();
+    var model = new TestModel("No name");
     model.accountNrs = [1, 3];
     model.save().then(expectAsync((TestModel saved) {
       expect(saved.accountNrs, equals([1, 3]));

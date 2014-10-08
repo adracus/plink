@@ -21,7 +21,7 @@ abstract class Schema<E> {
       
   
   InstanceMirror newInstanceMirror() =>
-      reflectClass(type).newInstance(_empty, []);
+      _defaultInstanceMirror(type);
       
       
   newInstance() => newInstanceMirror().reflectee;
