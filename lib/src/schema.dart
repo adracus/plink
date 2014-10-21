@@ -1,6 +1,46 @@
 part of plink;
 
 
+
+class SchemaParser {
+  SchemaIndex parse(library) {
+    if (library is! LibraryMirror && library is! $libraryMirror)
+      throw new ArgumentError(library);
+    var classes = $(library).getClasses();
+    var result = {};
+    classes.forEach((_, mirr) {
+      if (_isModelSubtype(mirr) && !_shouldBeIgnored(mirr))
+        result[mirr.reflectedType] = new ModelSchema.fromMirror(mirr);
+    });
+    return new SchemaIndex(result);
+  }
+}
+
+
+
+class SchemaIndex {
+  final Map<Type, Schema> _schemaCache;
+  
+  SchemaIndex(this._schemaCache);
+  
+  Schema getSchema(arg) {
+    if (arg is Type) return _schemaCache[arg];
+    if (arg is String) return _schemaCache.values.firstWhere((key) =>
+        key.name == arg, orElse: () => null);
+    throw new ArgumentError("Unsupported argument " +
+        "type ${arg.runtimeType.toString()})");
+  }
+  
+  ModelSchema getModelSchema(arg) {
+    if (arg is Model) return _schemaCache[arg.runtimeType];
+    return getSchema(arg);
+  }
+  
+  List<Schema> get schemes => _schemaCache.values.toList();
+}
+
+
+
 abstract class Schema<E> {
   final Type type;
   final String name;
@@ -27,7 +67,7 @@ abstract class Schema<E> {
   newInstance() => newInstanceMirror().reflectee;
   
   
-  Future _ensureExistence() => REPO._checkTable(this);
+  Future _ensureExistence() => REPO.ensureExistence(this);
 }
 
 
@@ -58,6 +98,13 @@ abstract class StrongSchema<E> extends Schema<E> {
   
   
   Future _delete(E data, {bool recursive: false});
+  
+  
+  Future<List<E>> all() {
+    return _ensureExistence().then((_) => _all());
+  }
+  
+  Future _all();
 }
 
 
@@ -113,9 +160,9 @@ class ModelSchema extends StrongSchema<Model> {
   Future<Model> _save(Model model) {
     return _store(model).then((saved) {
       return Future.wait(relations.map((rel) =>
-          rel.save(model.getField(rel.fieldName), saved)
+          rel.save(model._getField(rel.fieldName), saved)
             .then((savedRelation) =>
-                saved.setField(rel.fieldName, savedRelation))))
+                saved._setField(rel.fieldName, savedRelation))))
             .then((_) => saved);
     });
   }
@@ -140,9 +187,17 @@ class ModelSchema extends StrongSchema<Model> {
   }
   
   
+  Future<List<Model>> _all() {
+    return REPO.adapter.all(this.name).then((rows) {
+      var models = rows.map(instantiateByRow).toList();
+      return Future.wait(models.map(_populate));
+    });
+  }
+  
+  
   Future<Model> _populate(Model model) {
     return Future.wait(relations.map((rel) => rel.where(model).then((value) =>
-        model.setField(rel.fieldName, value)))).then((_) => model);
+        model._setField(rel.fieldName, value)))).then((_) => model);
   }
   
   
