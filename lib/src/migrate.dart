@@ -1,79 +1,19 @@
 part of plink;
 
-bool autoMigrate = false;
+
+abstract class Migrator {
+  final int levenshteinThreshold;
+  
+  const Migrator(this.levenshteinThreshold);
+  
+  Future migrate();
+}
 
 
-class Migrator {
-  int levenshteinThreshold;
-  DatabaseAdapter _adapter;
-  Map<Schema, dynamic> _existingTables;
-  final SchemaIndex schemaIndex;
+class AutoMigrator extends Migrator {
+  const AutoMigrator(int levenshteinThreshold) : super(levenshteinThreshold);
   
-  Migrator(this.levenshteinThreshold, this.schemaIndex, this._adapter) {
-    if (this._adapter != null) migrate();
-  }
-  
-  Migrator._byConfig(Configuration config, SchemaIndex index)
-      : this(config.levenshteinThreshold, index, config.adapter);
-  
-  
-  Future migrate() {
-    var tablesInMemory = schemaIndex.schemes.map((s) => new Table.fromSchema(s));
-    _existingTables = {};
-    REPO.saveMany(tablesInMemory.toList());
-    var tableSchema = schemaIndex.getSchema(Table);
-    tableSchema.all().then((tables) {
-      var databaseTables = new Set()..addAll(tables);
-      for (var table in tablesInMemory) {
-        if (databaseTables.any((dbTable) => dbTable == table)) continue;
-        var match = getTableMatch(table, databaseTables);
-        if (match == null) {
-          ensureExistence(schemaIndex.getSchema(table.name));
-          tableSchema.save(table);
-          continue;
-        }
-      }
-    });
-  }
-  
-  
-  Table getTableMatch(Table inMemoryTable, Set<Table> databaseTables) {
-    var matches = databaseTables.map((databaseTable) =>
-        new TableMatchResult(inMemoryTable, databaseTable));
-    if (matches.length == 0) return null;
-    return (matches.toList()..sort()).last.matched;
-  }
-  
-  
-  Future ensureExistence(Schema schema) {
-    if (_existingTables[schema] == true) return new Future.value(true);
-    if (_existingTables[schema] is Future) // Check for table could be running
-      return _existingTables[schema].then((_) => ensureExistence(schema));
-    var f = _adapter.hasTable(schema.name).then((res) {
-      if (res) {
-        _existingTables[schema] = true;
-        return new Future.value();
-      }
-      var fs = [];
-      fs..add(_createTableFromSchema(schema))
-        ..addAll(schema.relations.map(ensureExistence));
-      return Future.wait(fs);
-    });
-    _existingTables[schema] = f;
-    return f;
-  }
-  
-  
-  Future _createTableFromSchema(Schema schema) =>
-      _existingTables[schema] =
-        _adapter.createTable(schema.name, schema.fields)
-          .then((_) => _existingTables[schema] = true);
-  
-  
-  void set adapter(DatabaseAdapter adapter) {
-    _adapter = adapter;
-    if (_adapter != null) migrate();
-  }
+  Future migrate() => new Future.value();
 }
 
 

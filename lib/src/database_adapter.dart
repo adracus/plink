@@ -52,3 +52,43 @@ abstract class MemoryAdapter implements DatabaseAdapter {
   
   Future createTable(String tableName, List<FieldSchema> columns);
 }
+
+
+abstract class Watcher<E> {
+  void beforeChange(E old, E nu) => null;
+  void afterChange(E old, E nu) => null;
+}
+
+
+class Observer<E> {
+  E _observed;
+  List<Watcher<E>> _watchers = [];
+  
+  Observer([this._observed, this._watchers]) {
+    if (_watchers == null) _watchers = [];
+  }
+  
+  E get observed => _observed;
+  
+  void addWatcher(Watcher<E> watcher) => _watchers.add(watcher);
+  bool removeWatcher(Watcher<E> watcher) => _watchers.remove(watcher);
+  
+  set observed(E nu) {
+    if (observed == nu) {
+      this.observed = nu;
+      return nu;
+    }
+    var old = _observed;
+    _watchers.forEach((watcher) => watcher.beforeChange(old, nu));
+    _observed = nu;
+    _watchers.forEach((watcher) => watcher.afterChange(old, nu));
+    return nu;
+  }
+}
+
+
+final Observer<DatabaseAdapter> _surveillance =
+  new Observer<DatabaseAdapter>();
+
+DatabaseAdapter get adapter => _surveillance.observed;
+set adapter(DatabaseAdapter adapter) => _surveillance.observed = adapter;

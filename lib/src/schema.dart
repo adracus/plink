@@ -1,9 +1,14 @@
 part of plink;
 
+final SchemaIndex SCHEMA_INDEX = new SchemaIndex._global();
 
 
-class SchemaParser {
-  SchemaIndex parse(library) {
+class SchemaIndex {
+  final Map<Type, Schema> _schemaCache;
+  
+  SchemaIndex(this._schemaCache);
+  
+  factory SchemaIndex.from(library) {
     if (library is! LibraryMirror && library is! $libraryMirror)
       throw new ArgumentError(library);
     var classes = $(library).getClasses();
@@ -14,14 +19,10 @@ class SchemaParser {
     });
     return new SchemaIndex(result);
   }
-}
-
-
-
-class SchemaIndex {
-  final Map<Type, Schema> _schemaCache;
   
-  SchemaIndex(this._schemaCache);
+  factory SchemaIndex._global() {
+    return new SchemaIndex.from($.rootLibrary);
+  }
   
   Schema getSchema(arg) {
     if (arg is Type) return _schemaCache[arg];
@@ -41,11 +42,12 @@ class SchemaIndex {
 
 
 
-abstract class Schema<E> {
+abstract class Schema<E> extends Object with Watcher<DatabaseAdapter> {
   final Type type;
   final String name;
   final List<FieldSchema> fields;
   final List<Relation> relations;
+  var _exists = false;
   
   
   FieldSchema getField(String name) =>
@@ -53,7 +55,9 @@ abstract class Schema<E> {
   
   
   Schema(this.type, this.name, [this.fields = const [],
-      this.relations = const[]]);
+      this.relations = const[]]) {
+    _surveillance.addWatcher(this);
+  }
   
   
   String toString() => "Schema '$name' (${fields.map((f) =>
@@ -67,7 +71,29 @@ abstract class Schema<E> {
   newInstance() => newInstanceMirror().reflectee;
   
   
-  Future _ensureExistence() => REPO.ensureExistence(this);
+  Future ensureExistence() {
+    if (_exists == true) return new Future.value(true);
+    if (_exists == false) {
+      return _exists = adapter.hasTable(name).then((res) {
+        if (res == true) return _exists = res;
+        return adapter.createTable(name, fields).then((_) {
+          return Future.wait(relations.map((rel) => rel.ensureExistence()));
+        });
+      });
+    }
+    return _exists.then((_) => ensureExistence());
+  }
+  
+  
+  Future<bool> exists() {
+    if (_exists == true) return new Future.value(true);
+    return null;
+  }
+  
+  
+  void afterChange(DatabaseAdapter old, DatabaseAdapter nu) {
+    _exists = false;
+  }
 }
 
 
@@ -78,14 +104,14 @@ abstract class StrongSchema<E> extends Schema<E> {
   
   
   Future<E> save(E data, {bool recursive: true}) =>
-      _ensureExistence().then((_) => _save(data, recursive: recursive));
+      ensureExistence().then((_) => _save(data, recursive: recursive));
   
   
   Future<E> _save(E data, {bool recursive: true});
   
   
   Future<List<E>> where(Map<String, dynamic> criteria, {bool populate: true}) {
-    return _ensureExistence().then((_) =>
+    return ensureExistence().then((_) =>
         _where(criteria, populate: populate));
   }
   
@@ -94,7 +120,7 @@ abstract class StrongSchema<E> extends Schema<E> {
   
   
   Future delete(E data, {bool recursive: true}) {
-    return _ensureExistence().then((_) => _delete(data, recursive: recursive));
+    return ensureExistence().then((_) => _delete(data, recursive: recursive));
   }
   
   
@@ -102,7 +128,7 @@ abstract class StrongSchema<E> extends Schema<E> {
   
   
   Future<List<E>> all({bool populate: true}) {
-    return _ensureExistence().then((_) => _all(populate: populate));
+    return ensureExistence().then((_) => _all(populate: populate));
   }
   
   
@@ -117,7 +143,7 @@ abstract class WeakSchema<E, D> extends Schema<E> {
        : super(type, name, fields, relations);
   
   Future<E> save(E data, D dependency) {
-    return _ensureExistence().then((_) => _save(data, dependency));
+    return ensureExistence().then((_) => _save(data, dependency));
   }
   
   
@@ -125,14 +151,14 @@ abstract class WeakSchema<E, D> extends Schema<E> {
   
   
   Future<E> where(D dependency) =>
-      _ensureExistence().then((_) => _where(dependency));
+      ensureExistence().then((_) => _where(dependency));
   
   
   Future<E> _where(D dependency);
   
   
   Future delete(D dependency) =>
-      _ensureExistence().then((_) => _delete(dependency));
+      ensureExistence().then((_) => _delete(dependency));
   
   
   Future _delete(D dependency);
@@ -184,7 +210,7 @@ class ModelSchema extends StrongSchema<Model> {
   
   
   Future<List<Model>> _where(Map<String, dynamic> criteria, {bool populate: true}) {
-    return REPO.adapter.findWhere(this.name, criteria).then((rows) {
+    return adapter.findWhere(this.name, criteria).then((rows) {
       var models = rows.map(instantiateByRow).toList(growable: true);
       if (!populate) return models;
       return Future.wait(models.map(_populate));
@@ -193,7 +219,7 @@ class ModelSchema extends StrongSchema<Model> {
   
   
   Future<List<Model>> _all({bool populate: true}) {
-    return REPO.adapter.all(this.name).then((rows) {
+    return adapter.all(this.name).then((rows) {
       var models = rows.map(instantiateByRow).toList(growable: true);
       if (!populate) return models;
       return Future.wait(models.map(_populate));
@@ -209,7 +235,7 @@ class ModelSchema extends StrongSchema<Model> {
   
   Future<Model> _create(Model model) {
     model.beforeCreate();
-    return REPO.adapter.saveToTable(name,
+    return adapter.saveToTable(name,
         extractFieldValues(model)).then(instantiateByRow);
   }
   
@@ -218,13 +244,13 @@ class ModelSchema extends StrongSchema<Model> {
     model.beforeUpdate();
     var values = extractFieldValues(model);
     var id = values.remove("id");
-    return REPO.adapter.updateToTable(this.name,
+    return adapter.updateToTable(this.name,
         values, {"id": id}).then(instantiateByRow);
   }
   
   
   Future _delete(Model model, {bool recursive: true}) {
-    return REPO.adapter.delete(name, {"id": model.id}).then((_) {
+    return adapter.delete(name, {"id": model.id}).then((_) {
       if (!recursive) return new Future.value();
       return Future.wait(relations.map((rel) =>
           rel.delete(model)));
@@ -276,11 +302,11 @@ abstract class Relation<E> extends WeakSchema<E, Model> {
   
   
   Future deleteRelationLink(Model m) =>
-      REPO.adapter.delete(name, {idName: m.id});
+      adapter.delete(name, {idName: m.id});
   
   
   Future<List<Map<String, dynamic>>> fetchRows(Model dependency) =>
-          REPO.adapter.findWhere(name, {idName: dependency.id});
+      adapter.findWhere(name, {idName: dependency.id});
   
   
   static String getRelationName(VariableMirror mirror) =>
@@ -308,7 +334,7 @@ class ModelRelation extends Relation<Model> {
     if (data == null) return _delete(dependency).then((_) => null);
     return _delete(dependency).then((_) {
       return data.save().then((saved) {
-        return REPO.adapter.saveToTable(name,
+        return adapter.saveToTable(name,
             {idName: dependency.id, fieldName: saved.id}).then((_) => saved);
       });
     });
@@ -318,7 +344,8 @@ class ModelRelation extends Relation<Model> {
   Future<Model> _where(Model dependency) {
     return fetchRows(dependency).then((rows) {
       if (rows.length == 0) return null;
-      return REPO.find(type, rows.single[fieldName]);
+      var id = rows.single[fieldName];
+      return SCHEMA_INDEX.getModelSchema(type).find(id, populate: true);
     });
   }
   
@@ -405,7 +432,7 @@ class PrimitiveListRelation extends ListRelation<dynamic> {
     }
     return _delete(model).then((_) { // TODO: Intelligent diff instead of delete
       return Future.wait(listToMap(data, model).map((values) =>
-        REPO.adapter.saveToTable(name, values))).then((_) => data);
+        adapter.saveToTable(name, values))).then((_) => data);
     });
   }
   
@@ -460,7 +487,7 @@ class ModelListRelation extends ListRelation<List<Model>>{
     return _delete(model).then((_) {
       return Future.wait(models.map((m) => m.save())).then((savedModels) {
         return Future.wait(listToMap(savedModels, model).map((map) =>
-            REPO.adapter.saveToTable(name, map))).then((_) {
+            adapter.saveToTable(name, map))).then((_) {
           return savedModels.toList(growable: true);
         });
       });
@@ -481,8 +508,8 @@ class ModelListRelation extends ListRelation<List<Model>>{
   Future<List<Model>> _where(Model model) {
     return fetchRows(model).then((rows) {
       return Future.wait(rows.map((row) => row[fieldName]).map((id) =>
-          REPO.find(listType, id))).then((models) =>
-              models.toList(growable: true));
+          SCHEMA_INDEX.getModelSchema(listType).find(id, populate: true)))
+            .then((models) => models.toList(growable: true));
     });
   }
   

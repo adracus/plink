@@ -25,8 +25,7 @@ class TestName extends Model {
 printRecord(record) => print(record);
 
 main() {
-  autoMigrate = true;
-  REPO.adapter =
+  adapter =
       new PostgresAdapter("postgres://dartman:password@localhost:5432/dartbase");
   log.onRecord.listen(printRecord);
   

@@ -48,12 +48,15 @@ class Model {
   }
   
   
-  void _setField(String name, value) {
-    reflect(this).setField(new Symbol(name), value);
+  _setField(String name, value) {
+    reflect(this).setField(new Symbol(name), value).reflectee;
   }
   
   
   _getField(String name) {
     return reflect(this).getField(new Symbol(name)).reflectee;
   }
+  
+  
+  ModelSchema get _schema => SCHEMA_INDEX.getModelSchema(this);
 }

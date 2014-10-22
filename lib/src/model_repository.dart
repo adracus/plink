@@ -1,64 +1,71 @@
 part of plink;
 
 
-class ModelRepository {
-  DatabaseAdapter _adapter;
-  Migrator _migrator;
-  final SchemaIndex schemaIndex;
+class ModelRepository extends Object with Watcher<DatabaseAdapter>{
+  final AutoMigrator _migrator;
+  Future _runningMigration;
   
   
-  ModelRepository(this._adapter, this._migrator, this.schemaIndex);
+  ModelRepository(this._migrator) {
+    _surveillance.addWatcher(this);
+    _migrate();
+  }
+  
+  
+  void _migrate() {
+    if (adapter != null && _migrator != null) {
+      _runningMigration = _migrator.migrate().then((_) =>
+          _runningMigration = null);
+    }
+  }
   
   
   ModelRepository._byConfig(Configuration config)
-      : schemaIndex = new SchemaParser().parse($.rootLibrary) {
-    this._adapter = config.adapter;
-    this._migrator = new Migrator._byConfig(config, this.schemaIndex);
+      : this(config.migrator);
+  
+  
+  Future _checkMigration() {
+    if (_runningMigration == null) return new Future.value();
+    return _runningMigration;
   }
   
   
   Future<Model> save(Model model, {bool recursive: true}) =>
-      schemaIndex.getModelSchema(model).save(model, recursive: recursive);
+      _checkMigration().then((_) =>
+          SCHEMA_INDEX.getModelSchema(model).save(model, recursive: recursive));
   
   
   Future<List<Model>> saveMany(List<Model> models, {bool recursive: true}) =>
-      Future.wait(models.map((model) => model.save(recursive: recursive)));
+      _checkMigration().then((_) =>
+          Future.wait(models.map((model) => model.save(recursive: recursive))));
   
   
   Future delete(Model model, {bool recursive: true}) =>
-      schemaIndex.getModelSchema(model).delete(model, recursive: recursive);
+      _checkMigration().then((_) =>
+          SCHEMA_INDEX.getModelSchema(model).delete(model, recursive: recursive));
   
   
   Future deleteMany(List<Model> models, {bool recursive: true}) =>
-      Future.wait(models.map((model) => model.delete(recursive: recursive)));
+      _checkMigration().then((_) =>
+          Future.wait(models.map((model) => model.delete(recursive: recursive))));
   
   
   Future<Model> find(Type type, int id, {bool populate: true}) =>
-      schemaIndex.getModelSchema(type).find(id, populate: populate);
+      _checkMigration().then((_) =>
+        SCHEMA_INDEX.getModelSchema(type).find(id, populate: populate));
   
   
   Future where(Type type, Map<String, dynamic> condition,
                {bool populate: true}) =>
-      schemaIndex.getModelSchema(type).where(condition);
+                   _checkMigration().then((_) =>
+                      SCHEMA_INDEX.getModelSchema(type).where(condition));
   
   
-  Future ensureExistence(Schema schema) => _migrator.ensureExistence(schema);
+  Future all(Type type, {bool populate: true}) =>
+      _checkMigration().then((_) =>
+          SCHEMA_INDEX.getModelSchema(type).all(populate: populate));
   
-  
-  Future all(Type type, {bool populate: true}) {
-    return schemaIndex.getModelSchema(type).all(populate: populate);
-  }
-  
-  
-  Future<List<Map<String, dynamic>>> fetchRelation(String link_tableName,
-      int link_id, Schema schema) {
-    return adapter.findWhere(schema.name, {"${link_tableName}_id": link_id});
-  }
-  
-  DatabaseAdapter get adapter => _adapter;
-  
-  void set adapter(DatabaseAdapter adapter) {
-    _adapter = adapter;
-    _migrator.adapter = adapter;
+  void afterChange(DatabaseAdapter old, DatabaseAdapter nu) {
+    _migrate();
   }
 }
