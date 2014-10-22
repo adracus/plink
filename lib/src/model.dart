@@ -10,10 +10,11 @@ class Model {
   DateTime created_at;
   DateTime updated_at;
   
-  Future<Model> save() => REPO.save(this);
+  Future<Model> save({bool recursive: true}) =>
+      REPO.save(this, recursive: recursive);
   
   
-  Future delete({bool recursive: false}) {
+  Future delete({bool recursive: true}) {
     if (id == null)
       return new Future.error("Cannot delete non persistent model");
     beforeDelete();

@@ -2,6 +2,7 @@ library plink;
 
 import 'dart:mirrors';
 import 'dart:async' show Future;
+import 'dart:math' show min, max;
 import 'package:u_til/u_til.dart';
 import 'package:logging/logging.dart';
 

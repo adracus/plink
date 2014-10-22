@@ -17,22 +17,24 @@ class ModelRepository {
   }
   
   
-  Future<Model> save(Model model) => schemaIndex.getModelSchema(model).save(model);
+  Future<Model> save(Model model, {bool recursive: true}) =>
+      schemaIndex.getModelSchema(model).save(model, recursive: recursive);
   
   
-  Future<List<Model>> saveMany(List<Model> models) =>
-      Future.wait(models.map((model) => model.save()));
+  Future<List<Model>> saveMany(List<Model> models, {bool recursive: true}) =>
+      Future.wait(models.map((model) => model.save(recursive: recursive)));
   
   
-  Future delete(Model model, {bool recursive: false}) =>
+  Future delete(Model model, {bool recursive: true}) =>
       schemaIndex.getModelSchema(model).delete(model, recursive: recursive);
   
   
-  Future deleteMany(List<Model> models, {bool recursive: false}) =>
+  Future deleteMany(List<Model> models, {bool recursive: true}) =>
       Future.wait(models.map((model) => model.delete(recursive: recursive)));
   
   
-  Future<Model> find(Type type, int id) => schemaIndex.getModelSchema(type).find(id);
+  Future<Model> find(Type type, int id, {bool populate: true}) =>
+      schemaIndex.getModelSchema(type).find(id, populate: populate);
   
   
   Future where(Type type, Map<String, dynamic> condition,
@@ -44,7 +46,7 @@ class ModelRepository {
   
   
   Future all(Type type, {bool populate: true}) {
-    return schemaIndex.getModelSchema(type).all();
+    return schemaIndex.getModelSchema(type).all(populate: populate);
   }
   
   

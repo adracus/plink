@@ -77,34 +77,36 @@ abstract class StrongSchema<E> extends Schema<E> {
       : super(type, name, fields, relations);
   
   
-  Future<E> save(E data) => _ensureExistence().then((_) => _save(data));
+  Future<E> save(E data, {bool recursive: true}) =>
+      _ensureExistence().then((_) => _save(data, recursive: recursive));
   
   
-  Future<E> _save(E data);
+  Future<E> _save(E data, {bool recursive: true});
   
   
-  Future<List<E>> where(Map<String, dynamic> criteria) {
+  Future<List<E>> where(Map<String, dynamic> criteria, {bool populate: true}) {
     return _ensureExistence().then((_) =>
-        _where(criteria));
+        _where(criteria, populate: populate));
   }
   
   
-  Future<List<E>> _where(Map<String, dynamic> criteria);
+  Future<List<E>> _where(Map<String, dynamic> criteria, {bool populate: true});
   
   
-  Future delete(E data, {bool recursive: false}) {
+  Future delete(E data, {bool recursive: true}) {
     return _ensureExistence().then((_) => _delete(data, recursive: recursive));
   }
   
   
-  Future _delete(E data, {bool recursive: false});
+  Future _delete(E data, {bool recursive: true});
   
   
-  Future<List<E>> all() {
-    return _ensureExistence().then((_) => _all());
+  Future<List<E>> all({bool populate: true}) {
+    return _ensureExistence().then((_) => _all(populate: populate));
   }
   
-  Future _all();
+  
+  Future _all({bool populate: true});
 }
 
 
@@ -129,11 +131,11 @@ abstract class WeakSchema<E, D> extends Schema<E> {
   Future<E> _where(D dependency);
   
   
-  Future delete(D dependency, {bool recursive: false}) =>
-      _ensureExistence().then((_) => _delete(dependency, recursive: recursive));
+  Future delete(D dependency) =>
+      _ensureExistence().then((_) => _delete(dependency));
   
   
-  Future _delete(D dependency, {bool recursive: false});
+  Future _delete(D dependency);
 }
 
 
@@ -157,8 +159,9 @@ class ModelSchema extends StrongSchema<Model> {
   }
   
   
-  Future<Model> _save(Model model) {
+  Future<Model> _save(Model model, {bool recursive: true}) {
     return _store(model).then((saved) {
+      if (!recursive) return saved;
       return Future.wait(relations.map((rel) =>
           rel.save(model._getField(rel.fieldName), saved)
             .then((savedRelation) =>
@@ -176,20 +179,23 @@ class ModelSchema extends StrongSchema<Model> {
   }
   
   
-  Future<Model> find(int id) => where({"id": id}).then((ms) => ms.single);
+  Future<Model> find(int id, {bool populate: true}) =>
+      where({"id": id}, populate: populate).then((ms) => ms.single);
   
   
-  Future<List<Model>> _where(Map<String, dynamic> criteria) {
+  Future<List<Model>> _where(Map<String, dynamic> criteria, {bool populate: true}) {
     return REPO.adapter.findWhere(this.name, criteria).then((rows) {
-      var models = rows.map(instantiateByRow).toList();
+      var models = rows.map(instantiateByRow).toList(growable: true);
+      if (!populate) return models;
       return Future.wait(models.map(_populate));
     });
   }
   
   
-  Future<List<Model>> _all() {
+  Future<List<Model>> _all({bool populate: true}) {
     return REPO.adapter.all(this.name).then((rows) {
-      var models = rows.map(instantiateByRow).toList();
+      var models = rows.map(instantiateByRow).toList(growable: true);
+      if (!populate) return models;
       return Future.wait(models.map(_populate));
     });
   }
@@ -217,10 +223,11 @@ class ModelSchema extends StrongSchema<Model> {
   }
   
   
-  Future _delete(Model model, {bool recursive: false}) {
+  Future _delete(Model model, {bool recursive: true}) {
     return REPO.adapter.delete(name, {"id": model.id}).then((_) {
+      if (!recursive) return new Future.value();
       return Future.wait(relations.map((rel) =>
-          rel.delete(model, recursive: recursive)));
+          rel.delete(model)));
     });
   }
   
@@ -316,11 +323,10 @@ class ModelRelation extends Relation<Model> {
   }
   
   
-  Future _delete(Model dependency, {bool recursive: false}) {
-    if (!recursive) return deleteRelationLink(dependency);
+  Future _delete(Model dependency) {
     return _where(dependency).then((model) {
       if (model == null) return null;
-      model.delete(recursive: recursive);
+      model.delete(recursive: true);
     }).then((_) {
       return deleteRelationLink(dependency);
     });
@@ -404,7 +410,7 @@ class PrimitiveListRelation extends ListRelation<dynamic> {
   }
   
   
-  Future _delete(Model dependency, {bool recursive: false}) {
+  Future _delete(Model dependency) {
     return deleteRelationLink(dependency);
   }
   
@@ -455,15 +461,14 @@ class ModelListRelation extends ListRelation<List<Model>>{
       return Future.wait(models.map((m) => m.save())).then((savedModels) {
         return Future.wait(listToMap(savedModels, model).map((map) =>
             REPO.adapter.saveToTable(name, map))).then((_) {
-          return savedModels;
+          return savedModels.toList(growable: true);
         });
       });
     });
   }
   
   
-  Future _delete(Model dependency, {bool recursive: false}) {
-    if (!recursive) return deleteRelationLink(dependency);
+  Future _delete(Model dependency) {
     return _where(dependency).then((models) {
       return Future.wait(models.map((model) => model.delete(recursive: true)))
           .then((_) {
@@ -476,7 +481,8 @@ class ModelListRelation extends ListRelation<List<Model>>{
   Future<List<Model>> _where(Model model) {
     return fetchRows(model).then((rows) {
       return Future.wait(rows.map((row) => row[fieldName]).map((id) =>
-          REPO.find(listType, id)));
+          REPO.find(listType, id))).then((models) =>
+              models.toList(growable: true));
     });
   }
   

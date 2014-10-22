@@ -88,11 +88,8 @@ class PostgresAdapter implements DatabaseAdapter {
   
   
   Future<List<Map<String, dynamic>>> all(String tableName) {
-    return obtainConnection().then((conn) {
-      return conn.query("SELECT * FROM \"$tableName\"")
-          .toList().then((rows) => transformRows(rows))
-          .whenComplete(() => conn.close());
-    });
+    return _query("SELECT * FROM \"$tableName\"").then((rows) =>
+        transformRows(rows));
   }
   
   

@@ -22,13 +22,13 @@ class TestName extends Model {
   String lastName;
 }
 
-onRecord(record) => print(record);
+printRecord(record) => print(record);
 
 main() {
   autoMigrate = true;
   REPO.adapter =
       new PostgresAdapter("postgres://dartman:password@localhost:5432/dartbase");
-  REPO.adapter.logger.onRecord.listen(onRecord);
+  log.onRecord.listen(printRecord);
   
   test("Model persisting", () {
     var model = new TestModel("Test Name");
