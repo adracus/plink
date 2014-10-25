@@ -2,13 +2,13 @@ import 'package:plink/plink.dart';
 import 'package:plink/postgres_adapter.dart';
 import 'package:unittest/unittest.dart';
 
-class TestModel extends Model {
+class TesetModel extends Model {
   String name;
   
-  TestModel(this.name);
+  TesetModel(this.name);
   
   @defaultConstructor
-  TestModel.def();
+  TesetModel.def();
   
   TestName testName;
   List<int> accountNrs;
@@ -29,7 +29,11 @@ main() {
       new PostgresAdapter("postgres://dartman:password@localhost:5432/dartbase");
   log.onRecord.listen(printRecord);
   
-  test("Model persisting", () {
+  REPO.all(Table).then((l) {
+    print(l);
+  });
+  
+  /*test("Model persisting", () {
     var model = new TestModel("Test Name");
     model.accountNrs = [1, 2, 3];
     model.names = [new TestName("That is", "A name")];
@@ -70,5 +74,5 @@ main() {
         savedAgain.delete();
       }));
     }));
-  });
+  });*/
 }

@@ -56,7 +56,7 @@ class PostgresAdapter implements DatabaseAdapter {
   
   
   Future createTable(String tableName, List<FieldSchema> fields) {
-    var variables = fields.map(columnsForCreate).join(", ");
+    var variables = fields.map(columnForCreate).join(", ");
     return _execute("CREATE TABLE \"$tableName\" ($variables)").then((_) =>
         new Future.value());
   }
@@ -69,11 +69,12 @@ class PostgresAdapter implements DatabaseAdapter {
     if (variable.type == "int") return "integer";
     if (variable.type == "double") return "double precision";
     if (variable.type == "datetime") return "timestamp";
+    if (variable.type == "bool") return "boolean";
     throw new UnsupportedError("Type '${variable.type}' not supported");
   }
   
   
-  String columnsForCreate(FieldSchema variable) {
+  String columnForCreate(FieldSchema variable) {
     var type = getType(variable);
     return ("\"${variable.name}\" $type " +
         variable.constraints.map(constraintsForCreate).join(" ")).trim();
@@ -151,5 +152,22 @@ class PostgresAdapter implements DatabaseAdapter {
                           "WHERE ${generateAndClause(condition.keys)} " +
                           "RETURNING *", substitutes)
                  .then((rows) => transformRows(rows).first);
+  }
+  
+  
+  Future renameTable(String oldTableName, String newTableName) {
+    return _execute("ALTER TABLE \"$oldTableName\" RENAME TO \"$newTableName\"");
+  }
+  
+  
+  Future addColumnToTable(String tableName, FieldSchema column) {
+    return _execute("ALTER TABLE \"$tableName\" ADD COLUMN " + 
+        "${columnForCreate(column)}");
+  }
+  
+  
+  Future removeColumnFromTable(String tableName, FieldSchema removed) {
+    return _execute("ALTER TABLE \"$tableName\" DROP COLUMN " +
+        "\"${removed.name}\"");
   }
 }

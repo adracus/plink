@@ -1,5 +1,18 @@
 part of plink;
 
+ModelRepository _repo;
+
+ModelRepository get REPO {
+  if (_repo == null) {
+    _initialize();
+  }
+  return _repo;
+}
+
+void _initialize() {
+  _repo = new ModelRepository._byConfig(defaultConfiguration);
+}
+
 
 class ModelRepository extends Object with Watcher<DatabaseAdapter>{
   final AutoMigrator _migrator;
@@ -35,7 +48,7 @@ class ModelRepository extends Object with Watcher<DatabaseAdapter>{
           SCHEMA_INDEX.getModelSchema(model).save(model, recursive: recursive));
   
   
-  Future<List<Model>> saveMany(List<Model> models, {bool recursive: true}) =>
+  Future<List<Model>> saveMany(Iterable<Model> models, {bool recursive: true}) =>
       _checkMigration().then((_) =>
           Future.wait(models.map((model) => model.save(recursive: recursive))));
   
@@ -45,7 +58,7 @@ class ModelRepository extends Object with Watcher<DatabaseAdapter>{
           SCHEMA_INDEX.getModelSchema(model).delete(model, recursive: recursive));
   
   
-  Future deleteMany(List<Model> models, {bool recursive: true}) =>
+  Future deleteMany(Iterable<Model> models, {bool recursive: true}) =>
       _checkMigration().then((_) =>
           Future.wait(models.map((model) => model.delete(recursive: recursive))));
   

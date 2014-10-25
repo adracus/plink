@@ -4,7 +4,7 @@ final SchemaIndex SCHEMA_INDEX = new SchemaIndex._global();
 
 
 class SchemaIndex {
-  final Map<Type, Schema> _schemaCache;
+  final Map<String, Schema> _schemaCache;
   
   SchemaIndex(this._schemaCache);
   
@@ -14,8 +14,12 @@ class SchemaIndex {
     var classes = $(library).getClasses();
     var result = {};
     classes.forEach((_, mirr) {
-      if (_isModelSubtype(mirr) && !_shouldBeIgnored(mirr))
-        result[mirr.reflectedType] = new ModelSchema.fromMirror(mirr);
+      if (_isModelSubtype(mirr) && !_shouldBeIgnored(mirr)) {
+        var schema = new ModelSchema.fromMirror(mirr);
+        result[schema.name] = schema;
+        schema.relations.forEach((relation) =>
+            result[relation.name] = relation);
+      }
     });
     return new SchemaIndex(result);
   }
@@ -25,15 +29,14 @@ class SchemaIndex {
   }
   
   Schema getSchema(arg) {
-    if (arg is Type) return _schemaCache[arg];
-    if (arg is String) return _schemaCache.values.firstWhere((key) =>
-        key.name == arg, orElse: () => null);
+    if (arg is Type) return _schemaCache[$(reflectType(arg).simpleName).name];
+    if (arg is String) return _schemaCache[arg];
     throw new ArgumentError("Unsupported argument " +
         "type ${arg.runtimeType.toString()})");
   }
   
   ModelSchema getModelSchema(arg) {
-    if (arg is Model) return _schemaCache[arg.runtimeType];
+    if (arg is Model) return getSchema(arg.runtimeType);
     return getSchema(arg);
   }
   
@@ -71,17 +74,27 @@ abstract class Schema<E> extends Object with Watcher<DatabaseAdapter> {
   newInstance() => newInstanceMirror().reflectee;
   
   
-  Future ensureExistence() {
+  Future ensureExistence({bool recursive: true}) {
     if (_exists == true) return new Future.value(true);
     if (_exists == false) {
       return _exists = adapter.hasTable(name).then((res) {
-        if (res == true) return _exists = res;
+        if (res == true) {
+          _exists = true;
+          return new Future.value(true);
+        };
         return adapter.createTable(name, fields).then((_) {
-          return Future.wait(relations.map((rel) => rel.ensureExistence()));
+          return Future.wait(relations.map((rel) =>
+              rel.ensureExistence(recursive: recursive)));
+        }).then((_) {
+          _exists = true;
+          return new Future.value(true);
         });
       });
     }
-    return _exists.then((_) => ensureExistence());
+    return (_exists as Future).then((_) {
+      if (_exists == true) return new Future.value();
+      return ensureExistence(recursive: recursive);
+    });
   }
   
   
@@ -107,6 +120,10 @@ abstract class StrongSchema<E> extends Schema<E> {
       ensureExistence().then((_) => _save(data, recursive: recursive));
   
   
+  Future<List<E>> saveMany(Iterable<E> data, {bool recursive: true}) =>
+      Future.wait(data.map((element) => save(element, recursive: recursive)));
+  
+  
   Future<E> _save(E data, {bool recursive: true});
   
   
@@ -122,6 +139,10 @@ abstract class StrongSchema<E> extends Schema<E> {
   Future delete(E data, {bool recursive: true}) {
     return ensureExistence().then((_) => _delete(data, recursive: recursive));
   }
+  
+  
+  Future deleteMany(Iterable<E> data, {bool recursive: true}) =>
+      Future.wait(data.map((element) => delete(element, recursive: recursive)));
   
   
   Future _delete(E data, {bool recursive: true});
@@ -333,7 +354,7 @@ class ModelRelation extends Relation<Model> {
   Future<Model> _save(Model data, Model dependency) {
     if (data == null) return _delete(dependency).then((_) => null);
     return _delete(dependency).then((_) {
-      return data.save().then((saved) {
+      return data._schema.save(data).then((saved) {
         return adapter.saveToTable(name,
             {idName: dependency.id, fieldName: saved.id}).then((_) => saved);
       });
@@ -357,6 +378,14 @@ class ModelRelation extends Relation<Model> {
     }).then((_) {
       return deleteRelationLink(dependency);
     });
+  }
+  
+  
+  Future ensureExistence({bool recursive: true}) {
+    var f = super.ensureExistence();
+    if (!recursive) return f;
+    return f.then((_) =>
+        SCHEMA_INDEX.getSchema(type).ensureExistence(recursive: true));
   }
 }
 
@@ -485,7 +514,7 @@ class ModelListRelation extends ListRelation<List<Model>>{
       return _delete(model).then((_) => null);
     }
     return _delete(model).then((_) {
-      return Future.wait(models.map((m) => m.save())).then((savedModels) {
+      return Future.wait(models.map((m) => m._schema.save(m))).then((savedModels) {
         return Future.wait(listToMap(savedModels, model).map((map) =>
             adapter.saveToTable(name, map))).then((_) {
           return savedModels.toList(growable: true);
@@ -520,6 +549,14 @@ class ModelListRelation extends ListRelation<List<Model>>{
       result.add({indexName: i, idName: model.id, fieldName: list[i].id});
     }
     return result;
+  }
+  
+  
+  Future ensureExistence({bool recursive: true}) {
+    var f = super.ensureExistence();
+    if (!recursive) return f;
+    return f.then((_) => SCHEMA_INDEX.getSchema(listType)
+                          .ensureExistence(recursive: true));
   }
 }
 

@@ -4,7 +4,7 @@ final Map<Type, Symbol> _defaultConstructorSymbols = {};
 const Object ignore = const Object();
 const Object defaultConstructor = const Object();
 const Symbol _empty = const Symbol("");
-const List<Type> PRIMITIVES = const [double, int, String, DateTime];
+const List<Type> PRIMITIVES = const [bool, double, int, String, DateTime];
 
 
 bool _isPrimitive(arg) => arg is Type ? PRIMITIVES.contains(arg) :

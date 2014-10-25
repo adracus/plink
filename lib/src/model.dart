@@ -2,7 +2,7 @@ part of plink;
 
 @ignore
 class Model {
-  @ignore
+  static const _MODEL_FIELDS = const ["id", "created_at", "updated_at"];
   static Map<Type, Map<Symbol, VariableMirror>> _fieldCache = {};
   
   @primaryKey @autoIncrement
@@ -42,9 +42,17 @@ class Model {
     _fields.keys.forEach((sym) {
       var value = reflection.getField(sym).reflectee;
       if (acceptNullValues || value != null) result[$(sym).name] = value;
-    });
-        
+    });   
     return result;
+  }
+  
+  
+  void updateWithOther(Model other) {
+    if (other.runtimeType != this.runtimeType)
+      throw new ArgumentError("$other has wrong type");
+    var values = other._extractValues(acceptNullValues: true);
+    _MODEL_FIELDS.forEach((field) => values.remove(field));
+    values.forEach((key, value) => _setField(key, value));
   }
   
   
