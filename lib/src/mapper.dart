@@ -22,7 +22,7 @@ abstract class PrimitiveMapper<T> extends Mapper<T> {
   PrimitiveMapper(SchemaIndex index) : super(index);
   
   FieldCombination get fields => new FieldCombination(
-        [new Field(#id, int, [KEY]),
+        [new Field(#id, int, [KEY, AUTO_INCREMENT]),
          new Field(#value, valueType)]);
   
   Type get valueType;

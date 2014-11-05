@@ -131,12 +131,18 @@ class PostgresAdapter implements DatabaseAdapter {
       keyNames.map((k) => "\"$k\" = @$k").join(" OR ");
   
   
-  Future<Map<String, dynamic>> insert(String tableName,
-      Map<String, dynamic> values) {
+  String generateInsertStatement(String tableName, Map<String, dynamic> values) {
+    var statement = "INSERT INTO \"$tableName\" ";
+    if (values.length == 0) return statement + "DEFAULT VALUES RETURNING *";
     var keyNames = values.keys.map((key) => '"$key"').join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
-    return _query("INSERT INTO \"$tableName\" ($keyNames) VALUES " + 
-                          "($keySubs) RETURNING *", values)
+    return statement + "($keyNames) VALUES ($keySubs) RETURNING *";
+  }
+  
+  
+  Future<Map<String, dynamic>> insert(String tableName,
+      Map<String, dynamic> values) {
+    return _query(generateInsertStatement(tableName, values), values)
                  .then((rows) => transformRows(rows).first);
   }
   

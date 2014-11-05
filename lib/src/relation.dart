@@ -42,6 +42,7 @@ class Relation implements WeakSchema {
   
   Future delete(int sourceId) => index.getAdapter().then((adapter) {
     return fetchRecord(adapter, sourceId).then((record) {
+      if (record == null) return new Future.value();
       return index.schemaFor(record[TARGET_TABLE]).delete(record[TARGET_ID]).then((_) {
         return adapter.delete(str(name), {ID: sourceId});
       });
@@ -49,7 +50,8 @@ class Relation implements WeakSchema {
   });
   
   Future<Map<String, dynamic>> fetchRecord(DatabaseAdapter adapter, int sourceId) =>
-      adapter.where(str(name), {ID: sourceId}).then((results) => results.single);
+      adapter.where(str(name), {ID: sourceId}).then((results) => 1 == results.length ?
+          results.single : null);
 
   toString() => "Relation '${str(name)}'";
 }

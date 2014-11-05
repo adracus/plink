@@ -35,21 +35,51 @@ class ModelSchema implements StrongSchema<Model> {
       });
     });
   });
+  
 
   Future<Model> save(Model model) => index.getAdapter().then((adapter) {
-    return delete(model.id).then((_) {
-      var mirr = reflect(model);
-      return Future.wait(relations.map((rel) =>
-          rel.save(model.id, mirr.getField(rel.simpleName).reflectee).then((saved) =>
-              saved is Mapped ? mirr.setField(rel.simpleName, saved.value) :
-                mirr.setField(rel.simpleName, saved)))).then((_) {
-        return adapter.insert(str(name), {"id": model.id}).then((saved) {
-          mirr.setField(#id, saved["id"]);
-          return mirr.reflectee;
-        });
-      });
+    if (null == model.id) return insert(model);
+    return update(model);
+  });
+  
+  
+  Future<Model> insert(Model model) => index.getAdapter().then((adapter) {
+    return adapter.insert(str(name), {}).then((saved) {
+      model.id = saved["id"];
+      return saveRelations(model).then((savedRelations) =>
+          updateModelWithRelations(model, savedRelations));
     });
   });
+  
+  
+  Future<Model> update(Model model) {
+    return saveRelations(model).then((savedRelations) =>
+        updateModelWithRelations(model, savedRelations));
+  }
+  
+  
+  Future<Map<Symbol, dynamic>> saveRelations(Model model) =>
+      index.getAdapter().then((adapter) {
+    var result = {};
+    return Future.wait(relations.map((relation) =>
+        relation.save(model.id, getRelationField(relation, model))
+                .then((savedItem) => result[relation.simpleName] = savedItem)))
+          .then((_) => result);
+  });
+  
+  
+  getRelationField(Relation relation, Model model) {
+    var reflection = reflect(model);
+    var instanceMirror = reflection.getField(relation.simpleName);
+    return instanceMirror.reflectee;
+  }
+  
+  
+  Model updateModelWithRelations(Model model, Map<Symbol, dynamic> savedRelations) {
+    var reflection = reflect(model);
+    savedRelations.forEach((name, value) => reflection.setField(name, value));
+    return reflection.reflectee;
+  }
   
   
   Future delete(int id, {bool notify: false}) => index.getAdapter().then((adapter) {

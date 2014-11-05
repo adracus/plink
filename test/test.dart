@@ -16,9 +16,13 @@ main() {
   var index = new SchemaIndex([reflectClass(TestClass)], migrator);
 
   var model = new TestClass();
+  model.firstName = "Watanga";
+  model.lastName = "No";
 
   var schema = index.getModelSchema(TestClass);
   schema.save(model).then((saved) {
     print(saved.id);
+    print(saved.firstName);
+    print(saved.lastName);
   });
 }

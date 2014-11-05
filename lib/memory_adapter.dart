@@ -46,7 +46,7 @@ class Table {
 
   Map<String, dynamic> insert(Map<String, dynamic> values) {
     var newRow = rowGenerator.generate(values);
-    if (rowGenerator.hasIdStructure) {
+    if (rowGenerator.hasAutoIncrementId) {
       newRow["id"] = _getNextId();
     }
     return newRow;
@@ -97,8 +97,9 @@ class TableRowGenerator {
   bool _isIdField(DatabaseField field) {
     return field.name == "id" &&
            field.type == "int" &&
-           field.constraints.contains(KEY);
+           field.constraints.contains(KEY) &&
+           field.constraints.contains(AUTO_INCREMENT);
   }
 
-  bool get hasIdStructure => structure.any(_isIdField);
+  bool get hasAutoIncrementId => structure.any(_isIdField);
 }
