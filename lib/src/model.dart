@@ -1,7 +1,11 @@
 part of plink;
 
+const defaultConstructor = const Object();
+
 
 class Model implements Identifyable {
+  static Map<Type, Symbol> _defaultConstructorSymbols = {};
+  
   int id;
   DateTime createdAt;
   DateTime updatedAt;
@@ -12,6 +16,27 @@ class Model implements Identifyable {
   void afterUpdate() => null;
   void beforeDelete() => null;
   void afterDelete() => null;
+  
+  static Symbol _getDefaultConstructorSymbol(Type type) {
+    if (_defaultConstructorSymbols[type] != null)
+      return _defaultConstructorSymbols[type];
+    var dec = ($(reflectClass(type).declarations.values.toList())
+        .extract(MethodMirror) as List<DeclarationMirror>);
+    var candidates = dec.where((method) => method.isConstructor &&
+        method.metadata.map((meta) => meta.reflectee)
+          .contains(defaultConstructor));
+    if (candidates.length == 1)
+      return _defaultConstructorSymbols[type] =
+        new Symbol(($(candidates.single.simpleName).name as String).split(".").last);
+    if (candidates.length > 1)
+      throw new UnsupportedError("Multiple default constructors are not allowed!");
+    return _defaultConstructorSymbols[type] = const Symbol("");
+  }
+  
+  static InstanceMirror defaultInstanceMirror(ClassMirror clazz) {
+    var constructorName = _getDefaultConstructorSymbol(clazz.reflectedType);
+    return clazz.newInstance(constructorName, []);
+  }
 }
 
 
@@ -28,9 +53,10 @@ class ModelSchema implements StrongSchema<Model> {
         index = index,
         name = clazz.qualifiedName,
         relations = $(clazz).fields.values
-          .where((field) => field.simpleName != #id)
+          .where((field) => field.simpleName != #id && !field.isStatic)
           .map((field) =>
               new Relation.fromField(field, clazz, index)).toList();
+  
 
   Future<Model> load(int id) => index.getAdapter().then((adapter) {
     return exists(adapter, id).then((result) {
@@ -38,8 +64,7 @@ class ModelSchema implements StrongSchema<Model> {
       var values = {};
       return Future.wait(relations.map((rel) => rel.load(id).then((loaded) =>
           values[rel.simpleName] = loaded))).then((_) {
-        var inst = clazz.newInstance(new Symbol(""), []);
-        print(values);
+        var inst = Model.defaultInstanceMirror(clazz);
         values.forEach((key, value) =>
             inst.setField(key, value));
         return inst.reflectee;

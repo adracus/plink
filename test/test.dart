@@ -9,6 +9,11 @@ class TestClass extends Model {
   List<String> otherStrings;
   Symbol test;
   Map aMap;
+  
+  TestClass(this.firstName, this.lastName);
+  
+  @defaultConstructor
+  TestClass.def();
 }
 
 main() {
@@ -18,15 +23,15 @@ main() {
   var migrator = new Migrator(adapter);
   var index = new SchemaIndex([reflectClass(TestClass)], migrator);
 
-  var model = new TestClass();
-  model.firstName = "Watanga";
-  model.lastName = "No";
+  var model = new TestClass("Watanga", "no");
   model.otherStrings = ["wahhhhahhh", "wuuuh"];
   model.test = #wahhaa;
   model.aMap = {1: "one", 2: "two"};
 
   var schema = index.getModelSchema(TestClass);
-  schema.load(1).then((model) {
-    print(model.aMap);
+  schema.save(model).then((model) {
+    schema.load(model.id).then((loaded) {
+      print(loaded.firstName);
+    });
   });
 }
