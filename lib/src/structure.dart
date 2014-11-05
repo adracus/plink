@@ -99,10 +99,9 @@ class SchemaIndex {
     _mappers = new MapperFramework(this);
     migrator.migrate(this);
   }
-
-  ModelSchema getModelSchema(Type type) {
-    return _schemes.firstWhere((schema) =>
-        schema is ModelSchema && schema.type == type);
+  
+  SchemaIndex.full(this._schemes, this._mappers, this.migrator) {
+    migrator.migrate(this);
   }
 
   Future<DatabaseAdapter> getAdapter() => migrator.getAdapter();
