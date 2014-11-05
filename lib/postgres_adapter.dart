@@ -2,7 +2,6 @@ library plink.postgres_adapter;
 
 import 'dart:async' show Future;
 import 'package:logging/logging.dart';
-import 'package:u_til/u_til.dart';
 import 'package:plink/plink.dart';
 import 'package:postgresql/postgresql.dart';
 
@@ -55,14 +54,14 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  Future createTable(String tableName, List<FieldSchema> fields) {
+  Future createTable(String tableName, List<DatabaseField> fields) {
     var variables = fields.map(columnForCreate).join(", ");
     return _execute("CREATE TABLE \"$tableName\" ($variables)").then((_) =>
         new Future.value());
   }
   
   
-  String getType(FieldSchema variable) {
+  String getType(DatabaseField variable) {
     if (variable.constraints.any((elem) =>
         elem is AutoIncrement)) return "serial";
     if (variable.type == "string") return "text";
@@ -74,16 +73,16 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  String columnForCreate(FieldSchema variable) {
+  String columnForCreate(DatabaseField variable) {
     var type = getType(variable);
     return ("\"${variable.name}\" $type " +
         variable.constraints.map(constraintsForCreate).join(" ")).trim();
   }
   
   
-  static String constraintsForCreate(constraint) {
-    if (constraint is PrimaryKey) return "primary key";
-    if (constraint is Unique) return "unique";
+  static String constraintsForCreate(Constraint constraint) {
+    /*if (constraint is PrimaryKey) return "primary key";
+    if (constraint is Unique) return "unique";*/
     return "";
   }
   
@@ -107,7 +106,7 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  Future<List<Map<String, dynamic>>> findWhere(String tableName,
+  Future<List<Map<String, dynamic>>> where(String tableName,
       Map<String, dynamic> condition) =>
       _query("SELECT * FROM \"$tableName\" WHERE " +
           generateAndClause(condition.keys), condition).then(transformRows);
@@ -132,7 +131,7 @@ class PostgresAdapter implements DatabaseAdapter {
       keyNames.map((k) => "\"$k\" = @$k").join(" OR ");
   
   
-  Future<Map<String, dynamic>> saveToTable(String tableName,
+  Future<Map<String, dynamic>> insert(String tableName,
       Map<String, dynamic> values) {
     var keyNames = values.keys.map((key) => '"$key"').join(", ");
     var keySubs = values.keys.map((name) => "@$name").join(", ");
@@ -160,13 +159,13 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
-  Future addColumnToTable(String tableName, FieldSchema column) {
+  Future addColumnToTable(String tableName, DatabaseField column) {
     return _execute("ALTER TABLE \"$tableName\" ADD COLUMN " + 
         "${columnForCreate(column)}");
   }
   
   
-  Future removeColumnFromTable(String tableName, FieldSchema removed) {
+  Future removeColumnFromTable(String tableName, DatabaseField removed) {
     return _execute("ALTER TABLE \"$tableName\" DROP COLUMN " +
         "\"${removed.name}\"");
   }

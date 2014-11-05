@@ -1,70 +1,70 @@
 part of plink;
 
-@ignore
+
 class Model {
-  static const _MODEL_FIELDS = const ["id", "created_at", "updated_at"];
-  static Map<Type, Map<Symbol, VariableMirror>> _fieldCache = {};
-  
-  @primaryKey @autoIncrement
   int id;
-  DateTime created_at;
-  DateTime updated_at;
-  
-  Future<Model> save({bool recursive: true}) =>
-      REPO.save(this, recursive: recursive);
-  
-  
-  Future delete({bool recursive: true}) {
-    if (id == null)
-      return new Future.error("Cannot delete non persistent model");
-    beforeDelete();
-    return REPO.delete(this, recursive: recursive);
-  }
-  
-  
-  void beforeCreate() => null;
-  void beforeUpdate() => null;
-  void beforeDelete() => null;
-  
-  
-  Map<Symbol, VariableMirror> get _fields {
-    if (Model._fieldCache[this.runtimeType] == null) {
-      Model._fieldCache[this.runtimeType] =
-          $($(reflect(this).type).fields).whereValue(_isFieldCandidate);
-    }
-    return Model._fieldCache[this.runtimeType];
-  }
-  
-  
-  Map<String, dynamic> _extractValues({bool acceptNullValues: false}) {
-    var reflection = reflect(this);
-    var result = {};
-    _fields.keys.forEach((sym) {
-      var value = reflection.getField(sym).reflectee;
-      if (acceptNullValues || value != null) result[$(sym).name] = value;
-    });   
-    return result;
-  }
-  
-  
-  void updateWithOther(Model other) {
-    if (other.runtimeType != this.runtimeType)
-      throw new ArgumentError("$other has wrong type");
-    var values = other._extractValues(acceptNullValues: true);
-    _MODEL_FIELDS.forEach((field) => values.remove(field));
-    values.forEach((key, value) => _setField(key, value));
-  }
-  
-  
-  _setField(String name, value) {
-    reflect(this).setField(new Symbol(name), value).reflectee;
-  }
+}
+
+
+class ModelSchema implements StrongSchema<Model> {
+  final Symbol name;
+  final SchemaIndex index;
+  final ClassMirror clazz;
+  final FieldCombination fields =
+      new FieldCombination([new Field(#id, int, [KEY, AUTO_INCREMENT])]);
+  final List<Relation> relations;
+
+  ModelSchema(ClassMirror clazz, SchemaIndex index)
+      : clazz = clazz,
+        index = index,
+        name = clazz.qualifiedName,
+        relations = $(clazz).fields.values
+          .where((field) => field.simpleName != #id)
+          .map((field) =>
+              new Relation.fromField(field, clazz, index)).toList();
+
+  Future<Model> load(int id) => index.getAdapter().then((adapter) {
+    return exists(adapter, id).then((result) {
+      if (!result) throw "Not found";
+      var values = {};
+      Future.wait(relations.map((rel) => rel.load(id).then((loaded) =>
+          values[rel.name] = loaded))).then((_) {
+        var inst = clazz.newInstance(new Symbol(""), []);
+        values.forEach((key, value) => inst.setField(key, value));
+        return inst.reflectee;
+      });
+    });
+  });
+
+  Future<Model> save(Model model) => index.getAdapter().then((adapter) {
+    return delete(model.id).then((_) {
+      var mirr = reflect(model);
+      return Future.wait(relations.map((rel) =>
+          rel.save(model.id, mirr.getField(rel.simpleName).reflectee).then((saved) =>
+              saved is Mapped ? mirr.setField(rel.simpleName, saved.value) :
+                mirr.setField(rel.simpleName, saved)))).then((_) {
+        return adapter.insert(str(name), {"id": model.id}).then((saved) {
+          mirr.setField(#id, saved["id"]);
+          return mirr.reflectee;
+        });
+      });
+    });
+  });
   
   
-  _getField(String name) {
-    return reflect(this).getField(new Symbol(name)).reflectee;
-  }
+  Future delete(int id, {bool notify: false}) => index.getAdapter().then((adapter) {
+    if (null == id) return new Future.value();
+    return exists(adapter, id).then((res) {
+      if (!res && notify) throw "Not found";
+      return Future.wait(relations.map((rel) => rel.delete(id))).then((_) {
+        return adapter.delete(str(name), {"id": id});
+      });
+    });
+  });
   
   
-  ModelSchema get _schema => SCHEMA_INDEX.getModelSchema(this);
+  Future<bool> exists(DatabaseAdapter adapter, int id) =>
+      adapter.where(str(name), {"id": id}).then((rows) => rows.length == 1);
+
+  Type get type => clazz.reflectedType;
 }
