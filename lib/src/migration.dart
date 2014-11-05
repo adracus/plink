@@ -17,6 +17,7 @@ class Migrator {
   }
   
   Future migrateSchema(Schema schema) {
+    if (!schema.needsPersistance) return new Future.value();
     var name = str(schema.name);
     return _adapter.hasTable(name).then((res) {
       if (res) return new Future.value();

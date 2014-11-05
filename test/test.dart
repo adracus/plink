@@ -6,6 +6,9 @@ import 'package:plink/memory_adapter.dart';
 class TestClass extends Model {
   String firstName;
   String lastName;
+  List<String> otherStrings;
+  Symbol test;
+  Map aMap;
 }
 
 main() {
@@ -18,11 +21,12 @@ main() {
   var model = new TestClass();
   model.firstName = "Watanga";
   model.lastName = "No";
+  model.otherStrings = ["wahhhhahhh", "wuuuh"];
+  model.test = #wahhaa;
+  model.aMap = {1: "one", 2: "two"};
 
   var schema = index.getModelSchema(TestClass);
-  schema.save(model).then((saved) {
-    print(saved.id);
-    print(saved.firstName);
-    print(saved.lastName);
+  schema.load(1).then((model) {
+    print(model.aMap);
   });
 }

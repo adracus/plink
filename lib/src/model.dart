@@ -1,8 +1,17 @@
 part of plink;
 
 
-class Model {
+class Model implements Identifyable {
   int id;
+  DateTime createdAt;
+  DateTime updatedAt;
+  
+  void beforeCreate() => null;
+  void afterCreate() => null;
+  void beforeUpdate() => null;
+  void afterUpdate() => null;
+  void beforeDelete() => null;
+  void afterDelete() => null;
 }
 
 
@@ -27,10 +36,12 @@ class ModelSchema implements StrongSchema<Model> {
     return exists(adapter, id).then((result) {
       if (!result) throw "Not found";
       var values = {};
-      Future.wait(relations.map((rel) => rel.load(id).then((loaded) =>
-          values[rel.name] = loaded))).then((_) {
+      return Future.wait(relations.map((rel) => rel.load(id).then((loaded) =>
+          values[rel.simpleName] = loaded))).then((_) {
         var inst = clazz.newInstance(new Symbol(""), []);
-        values.forEach((key, value) => inst.setField(key, value));
+        print(values);
+        values.forEach((key, value) =>
+            inst.setField(key, value));
         return inst.reflectee;
       });
     });
@@ -43,18 +54,27 @@ class ModelSchema implements StrongSchema<Model> {
   });
   
   
-  Future<Model> insert(Model model) => index.getAdapter().then((adapter) {
-    return adapter.insert(str(name), {}).then((saved) {
-      model.id = saved["id"];
-      return saveRelations(model).then((savedRelations) =>
-          updateModelWithRelations(model, savedRelations));
+  Future<Model> insert(Model model) {
+    model.beforeCreate();
+    return index.getAdapter().then((adapter) {
+      model.updatedAt = new DateTime.now();
+      model.createdAt = new DateTime.now();
+      return adapter.insert(str(name), {}).then((saved) {
+        model.id = saved["id"];
+        return saveRelations(model).then((savedRelations) =>
+            updateModelWithRelations(model, savedRelations))
+            .then((updated) => updated..afterCreate());
+      });
     });
-  });
+  }
   
   
   Future<Model> update(Model model) {
+    model.beforeUpdate();
+    model.updatedAt = new DateTime.now();
     return saveRelations(model).then((savedRelations) =>
-        updateModelWithRelations(model, savedRelations));
+        updateModelWithRelations(model, savedRelations))
+        .then((updated) => updated..afterUpdate());
   }
   
   
@@ -82,19 +102,32 @@ class ModelSchema implements StrongSchema<Model> {
   }
   
   
-  Future delete(int id, {bool notify: false}) => index.getAdapter().then((adapter) {
-    if (null == id) return new Future.value();
-    return exists(adapter, id).then((res) {
-      if (!res && notify) throw "Not found";
-      return Future.wait(relations.map((rel) => rel.delete(id))).then((_) {
-        return adapter.delete(str(name), {"id": id});
-      });
+  Future deleteModel(Model model) {
+    if (null == model.id) throw new ArgumentError("Model has to be persisted");
+    model.beforeDelete();
+    return delete(model.id).then((_) => model.afterDelete());
+  }
+  
+  
+  Future delete(int id) => index.getAdapter().then((adapter) {
+    if (null == id) throw new ArgumentError("id cannot be null");
+    return Future.wait(relations.map((rel) => rel.delete(id))).then((_) {
+      return adapter.delete(str(name), {"id": id});
     });
   });
   
   
   Future<bool> exists(DatabaseAdapter adapter, int id) =>
       adapter.where(str(name), {"id": id}).then((rows) => rows.length == 1);
+  
+  
+  Future drop() => index.getAdapter().then((adapter) {
+    return adapter.dropTable(str(name)).then((_) =>
+        Future.wait(relations.map((rel) => rel.drop())));
+  });
+  
 
   Type get type => clazz.reflectedType;
+  
+  bool get needsPersistance => true;
 }

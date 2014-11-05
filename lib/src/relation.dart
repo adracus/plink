@@ -54,4 +54,12 @@ class Relation implements WeakSchema {
           results.single : null);
 
   toString() => "Relation '${str(name)}'";
+  
+  
+  Future drop() => index.getAdapter().then((adapter) {
+    return adapter.dropTable(str(name));
+  });
+  
+  
+  bool get needsPersistance => true;
 }

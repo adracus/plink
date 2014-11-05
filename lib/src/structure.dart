@@ -8,11 +8,14 @@ const AutoIncrement AUTO_INCREMENT = const AutoIncrement();
 abstract class Schema<E> {
   Symbol get name;
   SchemaIndex get index;
+  
+  bool get needsPersistance;
 
   FieldCombination get fields;
 
   Future<E> load(int id);
   Future delete(int id);
+  Future drop();
 }
 
 
@@ -22,7 +25,12 @@ abstract class WeakSchema<E> implements Schema<E> {
 }
 
 
-abstract class StrongSchema<E> implements Schema<E>{
+abstract class Identifyable {
+  int get id;
+}
+
+
+abstract class StrongSchema<E extends Identifyable> implements Schema<E>{
   Future<E> save(E element);
   Future delete(int id);
 }
@@ -39,6 +47,9 @@ class FieldCombination {
 
   FieldCombination._(Iterable<Field> fields)
       : content = new Set.from(fields);
+  
+  FieldCombination._empty()
+      : content = new Set();
 }
 
 
@@ -99,16 +110,18 @@ class SchemaIndex {
   MapperFramework get mappers => _mappers;
   
   Schema schemaFor(arg) {
-    if (arg is! Type && arg is! String && arg is! Symbol)
-      throw new ArgumentError();
-    if (arg is Type) {
-      var mapper = mappers.mapperFor(arg);
-      if (mapper != null) return mapper;
-      return getModelSchema(arg);
-    }
-    var name = arg;
-    if (name is String) name = new Symbol(name);
-    return _schemes.firstWhere((scheme) => scheme.name == name);
+    var mapper = mappers.mapperFor(arg, orElse: () => null);
+    if (mapper != null) return mapper;
+    var name = _toSym(arg);
+    return _schemes.firstWhere((schema) => schema.name == name,
+        orElse: () => throw "No Schema found for $arg");
+  }
+  
+  static Symbol _toSym(arg) {
+    if (arg is String) return new Symbol(arg);
+    if (arg is Symbol) return arg;
+    if (arg is Type) return reflectType(arg).qualifiedName;
+    throw "Unsupported argument $arg";
   }
   
   List<Schema> get allSchemes {
@@ -124,28 +137,20 @@ class SchemaIndex {
 
 
 class MapperFramework {
-  final IntMapper intMapper;
-  final StringMapper stringMapper;
-  final DoubleMapper doubleMapper;
-  final DateTimeMapper dateTimeMapper;
-  final NullMapper nullMapper;
+  final List<Mapper> mappers;
   
   MapperFramework(SchemaIndex index)
-      : intMapper = new IntMapper(index),
-        stringMapper = new StringMapper(index),
-        doubleMapper = new DoubleMapper(index),
-        dateTimeMapper = new DateTimeMapper(index),
-        nullMapper = new NullMapper(index);
+      : mappers = Mapper.generateMappers(index);
   
-  Mapper mapperFor(Type type) {
-    if (type == int) return intMapper;
-    if (type == String) return stringMapper;
-    if (type == double) return doubleMapper;
-    if (type == DateTime) return dateTimeMapper;
-    if (type == Null) return nullMapper;
-    return null;
+  Mapper mapperFor(arg, {Mapper orElse ()}) {
+    if (arg is Type)
+      return mappers.firstWhere((mapper) =>
+          mapper.matches(arg), orElse: orElse);
+    if (arg is String)
+      return mappers.firstWhere((mapper) =>
+          mapper.name == new Symbol(arg), orElse: orElse);
+    throw "Unsupported argument $arg";
   }
   
-  List<Mapper> get mappers => [intMapper, stringMapper, doubleMapper,
-                               dateTimeMapper, nullMapper];
+  Future dropMappers() => Future.wait(mappers.map((mapper) => mapper.drop()));
 }
