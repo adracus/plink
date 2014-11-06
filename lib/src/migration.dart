@@ -8,7 +8,14 @@ class Migrator {
   Migrator(this._adapter);
 
   void migrate(SchemaIndex index) {
-    currentMigration = Future.wait(index.allSchemes.map(migrateSchema));
+    var f1 = Future.wait(index.mappers.mappers.map(migrateSchema));
+    var f2 = Future.wait(index.schemes.map(migrateModelSchema));
+    currentMigration = Future.wait([f1, f2]);
+  }
+  
+  Future migrateModelSchema(ModelSchema schema) {
+    return migrateSchema(schema).then((_) =>
+        Future.wait(schema.relations.map(migrateSchema)));
   }
 
   Future<DatabaseAdapter> getAdapter() {

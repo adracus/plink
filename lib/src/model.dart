@@ -58,19 +58,32 @@ class ModelSchema implements StrongSchema<Model> {
               new Relation.fromField(field, clazz, index)).toList();
   
 
-  Future<Model> load(int id) => index.getAdapter().then((adapter) {
+  Future<Model> find(int id) => index.getAdapter().then((adapter) {
     return exists(adapter, id).then((result) {
       if (!result) throw "Not found";
-      var values = {};
-      return Future.wait(relations.map((rel) => rel.load(id).then((loaded) =>
-          values[rel.simpleName] = loaded))).then((_) {
-        var inst = Model.defaultInstanceMirror(clazz);
-        values.forEach((key, value) =>
-            inst.setField(key, value));
-        return inst.reflectee;
-      });
+      return modelFromId(id);
     });
   });
+  
+  
+  Future<List<Model>> all() => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {}).then((idRecords) {
+      var ids = idRecords.map((record) => record["id"]);
+      return Future.wait(ids.map(modelFromId));
+    });
+  });
+  
+  
+  Future<Model> modelFromId(int id) {
+    var values = {};
+    return Future.wait(relations.map((rel) => rel.find(id).then((loaded) =>
+        values[rel.simpleName] = loaded))).then((_) {
+      var inst = Model.defaultInstanceMirror(clazz);
+      values.forEach((key, value) =>
+          inst.setField(key, value));
+      return inst.reflectee;
+    });
+  }
   
 
   Future<Model> save(Model model) => index.getAdapter().then((adapter) {

@@ -16,7 +16,7 @@ _value(arg) {
 abstract class Mapper<T> implements StrongSchema {
   SchemaIndex get index;
   
-  Future<T> load(int id);
+  Future<T> find(int id);
   Future<Mapped<T>> save(T element);
   
   static Type getMapperType(Mapper mapper) {
@@ -62,7 +62,7 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
     });
   });
   
-  Future<T> load(int id) => index.getAdapter().then((adapter) {
+  Future<T> find(int id) => index.getAdapter().then((adapter) {
     return adapter.where(str(name), {"id": id}).then((res) {
       return res.single["value"];
     });
@@ -74,6 +74,12 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
   
   Future drop() => index.getAdapter().then((adapter) =>
       adapter.dropTable(str(name)));
+  
+  Future<List<T>> all() => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {}).then((res) {
+      return res.map((row) => row["value"]).toList();
+    });
+  });
   
   bool get needsPersistance => true;
 }
@@ -99,10 +105,13 @@ abstract class ConvertMapper<T, E> implements Mapper<T> {
         new Mapped(mapped.id, decode(mapped.value)));
   }
   
-  Future<T> load(int id) => coveredSchema.load(id)
+  Future<T> find(int id) => coveredSchema.find(id)
     .then((loaded) => decode(loaded));
   
   Future delete(int id) => coveredSchema.delete(id);
+  
+  Future<List<T>> all() => coveredSchema.all()
+      .then((loaded) => loaded.map((E element) => decode(element)).toList());
 }
 
 
@@ -168,7 +177,7 @@ class NullMapper implements Mapper<Null> {
       new Future.value(new Mapped<Null>(1, null));
   
   
-  Future<Null> load(int id) => new Future.value(null);
+  Future<Null> find(int id) => new Future.value(null);
   
   Future delete(int id) => new Future.value();
   
@@ -179,6 +188,8 @@ class NullMapper implements Mapper<Null> {
   Future drop() => new Future.value();
   
   bool matches(Type type) => Null == type;
+  
+  Future<List<Null>> all() => new Future.value([null]);
 }
 
 class SymbolMapper extends Object with ConvertMapper<Symbol, String> {
@@ -251,16 +262,39 @@ class ListMapper implements Mapper<List> {
     });
   });
   
-  Future<List> load(int id) => index.getAdapter().then((adapter) {
-    return adapter.where(str(name), {"id": id}).then((rows) {
-      if (_isEmptyListResult(rows)) return new Future.value([]);
-      var fs = [];
-      var result = new List.generate(rows.length, (_) => null, growable: true);
-      Future.wait(rows.map((row) => _loadItemFromRow(row).then((loaded) {
-        result[row["index"]] = loaded;
-      }))).then((_) => result);
+  Future<List<List>> all() => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {}).then((records) {
+      var listRows = seperateListRows(records);
+      return Future.wait(listRows.map(listFromRows));
     });
   });
+  
+  List<List<Map<String, dynamic>>> seperateListRows(
+      List<Map<String, dynamic>> rows) {
+    var proto = {};
+    rows.forEach((row) {
+      var id = row["id"];
+      if (null == proto[id]) {
+        proto[id] = [row];
+        return;
+      }
+      proto[id].add(row);
+    });
+    return proto.values.toList();
+  }
+  
+  Future<List> find(int id) => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {"id": id}).then(listFromRows);
+  });
+  
+  Future<List> listFromRows(List<Map<String, dynamic>> rows) {
+    if (_isEmptyListResult(rows)) return new Future.value([]);
+    var fs = [];
+    var result = new List.generate(rows.length, (_) => null, growable: true);
+    return Future.wait(rows.map((row) => _loadItemFromRow(row).then((loaded) {
+      result[row["index"]] = loaded;
+    }))).then((_) => result);
+  }
   
   
   Future _deleteRow(DatabaseAdapter adapter, Map<String, dynamic> row) {
@@ -270,7 +304,7 @@ class ListMapper implements Mapper<List> {
   
   Future _loadItemFromRow(Map<String, dynamic> row) {
     var schema = index.schemaFor(row["targetTable"]);
-    return schema.load(row["targetId"]);
+    return schema.find(row["targetId"]);
   }
   
   
@@ -321,22 +355,49 @@ class MapMapper implements Mapper<Map> {
   
   bool matches(Type type) => reflectType(type).isSubtypeOf(reflectType(Map));
   
-  Future<Map> load(int id) => index.getAdapter().then((adapter) {
-    return adapter.where(str(name), {"id": id}).then((records) {
-      if (_isEmptyMapResult(records)) return new Future.value({});
-      return Future.wait(records.map((record) => _loadPair(adapter, record))).then((pairs) {
-        return KeyValuePair.fromKeyValues(pairs);
-      });
+  Future<List<Map>> all() => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {}).then((records) {
+      return Future.wait(seperateMapRows(records).map((record) =>
+          mapFromRecords(records, adapter)));
     });
   });
+  
+  Future<Map> find(int id) => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {"id": id}).then((records) {
+      return mapFromRecords(records, adapter);
+    });
+  });
+  
+  List<List<Map<String, dynamic>>> seperateMapRows(
+      List<Map<String, dynamic>> rows) {
+    var proto = {};
+    rows.forEach((row) {
+      var id = row["id"];
+      if (null == proto[id]) {
+        proto[id] = [row];
+        return;
+      }
+      proto[id].add(row);
+    });
+    return proto.values.toList();
+  }
+  
+  Future<Map> mapFromRecords(List<Map<String, dynamic>> records,
+      DatabaseAdapter adapter) {
+    if (_isEmptyMapResult(records)) return new Future.value({});
+    return Future.wait(records.map((record) =>
+        _loadPair(adapter, record))).then((pairs) {
+      return KeyValuePair.fromKeyValues(pairs);
+    });
+  }
   
   Future<KeyValuePair> _loadPair(DatabaseAdapter adapter, Map<String, dynamic> row) {
     var key, value;
     var keySchema = index.schemaFor(row["keyTable"]);
     var valueSchema = index.schemaFor(row["valueTable"]);
     var fs = [];
-    fs.add(keySchema.load(row["keyId"]).then((k) => key = k));
-    fs.add(valueSchema.load(row["valueId"]).then((v) => value = v));
+    fs.add(keySchema.find(row["keyId"]).then((k) => key = k));
+    fs.add(valueSchema.find(row["valueId"]).then((v) => value = v));
     return Future.wait(fs).then((_) => new KeyValuePair(key, value));
   }
   

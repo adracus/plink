@@ -20,12 +20,29 @@ class Relation implements WeakSchema {
         simpleName = field.simpleName,
         qualifiedName = field.qualifiedName;
 
-  Future load(int sourceId) => index.getAdapter().then((adapter) {
+  Future find(int sourceId) => index.getAdapter().then((adapter) {
     return fetchRecord(adapter, sourceId).then((record) {
       return index.schemaFor(record[TARGET_TABLE])
-                  .load(record[TARGET_ID]);
+                  .find(record[TARGET_ID]);
     });
   });
+  
+  
+  Future<List> all() => index.getAdapter().then((adapter) {
+    return adapter.where(str(name), {}).then((records) =>
+        Future.wait(records.map(valueFromRecord)));
+  });
+  
+  
+  Future valueFromRecord(Map<String, dynamic> record) =>
+      index.schemaFor(record[TARGET_TABLE])
+           .find(record[TARGET_ID]);
+  
+  
+  Future<List<int>> where(value) => index.getAdapter().then((adapter) {
+    
+  });
+  
   
   Symbol get name => combineSymbols(sourceName, simpleName);
   

@@ -107,9 +107,12 @@ class PostgresAdapter implements DatabaseAdapter {
   
   
   Future<List<Map<String, dynamic>>> where(String tableName,
-      Map<String, dynamic> condition) =>
-      _query("SELECT * FROM \"$tableName\" WHERE " +
-          generateAndClause(condition.keys), condition).then(transformRows);
+      Map<String, dynamic> condition) {
+    if (condition.length == 0)
+      return _query("SELECT * FROM \"$tableName\"").then(transformRows);
+    return _query("SELECT * FROM \"$tableName\" WHERE " +
+        generateAndClause(condition.keys), condition).then(transformRows);
+  }
   
   
   List<Map<String, dynamic>> transformRows(List<Row> rows) =>

@@ -28,9 +28,9 @@ main() {
   model.test = #wahhaa;
   model.aMap = {1: "one", 2: "two"};
 
-  var schema = index.getModelSchema(TestClass);
+  var schema = index.schemaFor(TestClass) as ModelSchema;
   schema.save(model).then((model) {
-    schema.load(model.id).then((loaded) {
+    schema.find(model.id).then((loaded) {
       print(loaded.firstName);
     });
   });

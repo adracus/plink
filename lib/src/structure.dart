@@ -13,7 +13,8 @@ abstract class Schema<E> {
 
   FieldCombination get fields;
 
-  Future<E> load(int id);
+  Future<E> find(int id);
+  Future<List<E>> all();
   Future delete(int id);
   Future drop();
 }
@@ -91,7 +92,7 @@ class ConstraintSet {
 class SchemaIndex {
   final Migrator migrator;
   MapperFramework _mappers;
-  Set<Schema> _schemes;
+  Set<ModelSchema> _schemes;
 
   SchemaIndex(Iterable<ClassMirror> classes, this.migrator) {
     _schemes = classes.toSet().map((clazz) =>
@@ -123,15 +124,7 @@ class SchemaIndex {
     throw "Unsupported argument $arg";
   }
   
-  List<Schema> get allSchemes {
-    var result = [];
-    result..addAll(_schemes)
-          ..addAll(_mappers.mappers)
-          ..addAll(_schemes.where((schema) =>
-        schema is ModelSchema).map((ModelSchema schema) =>
-            schema.relations).fold([], (l1, l2) => l1..addAll(l2)));
-    return result;
-  }
+  Set<Schema> get schemes => _schemes;
 }
 
 
