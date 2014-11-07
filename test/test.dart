@@ -1,7 +1,5 @@
-import 'dart:mirrors';
 import 'package:plink/plink.dart';
 import 'package:plink/postgres_adapter.dart';
-import 'package:plink/memory_adapter.dart';
 
 class TestClass extends Model {
   String firstName;
@@ -20,17 +18,16 @@ main() {
   var adapter = new PostgresAdapter(
       "postgres://dartman:password@localhost:5432/dartbase");
   adapter.logger.onRecord.listen((record) => print(record));
-  var migrator = new Migrator(adapter);
-  var index = new SchemaIndex([reflectClass(TestClass)], migrator);
+  var repo = new ModelRepository.global(adapter);
 
   var model = new TestClass("Watanga", "no");
   model.otherStrings = ["wahhhhahhh", "wuuuh"];
   model.test = #wahhaa;
   model.aMap = {1: "one", 2: "two"};
 
-  var schema = index.schemaFor(TestClass) as ModelSchema;
-  schema.save(model).then((model) {
-    schema.find(model.id).then((loaded) {
+  
+  repo.save(model).then((model) {
+    repo.find(TestClass, model.id).then((loaded) {
       print(loaded.firstName);
     });
   });

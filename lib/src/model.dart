@@ -3,7 +3,7 @@ part of plink;
 const defaultConstructor = const Object();
 
 
-class Model implements Identifyable {
+abstract class Model implements Identifyable {
   static Map<Type, Symbol> _defaultConstructorSymbols = {};
   
   int id;

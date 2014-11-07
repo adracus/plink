@@ -10,6 +10,7 @@ part 'src/relation.dart';
 part 'src/structure.dart';
 part 'src/migration.dart';
 part 'src/model.dart';
+part 'src/repository.dart';
 
 
 String str(Object obj) {

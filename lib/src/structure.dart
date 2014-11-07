@@ -90,22 +90,17 @@ class ConstraintSet {
 
 
 class SchemaIndex {
-  final Migrator migrator;
+  final AdapterEndpoint endpoint;
   MapperFramework _mappers;
   Set<ModelSchema> _schemes;
 
-  SchemaIndex(Iterable<ClassMirror> classes, this.migrator) {
+  SchemaIndex(Iterable<ClassMirror> classes, this.endpoint) {
     _schemes = classes.toSet().map((clazz) =>
         new ModelSchema(clazz, this)).toSet();
     _mappers = new MapperFramework(this);
-    migrator.migrate(this);
-  }
-  
-  SchemaIndex.full(this._schemes, this._mappers, this.migrator) {
-    migrator.migrate(this);
   }
 
-  Future<DatabaseAdapter> getAdapter() => migrator.getAdapter();
+  Future<DatabaseAdapter> getAdapter() => endpoint.getAdapter();
   
   MapperFramework get mappers => _mappers;
   
@@ -117,9 +112,17 @@ class SchemaIndex {
         orElse: () => throw "No Schema found for $arg");
   }
   
+  ModelSchema modelSchemaFor(arg){
+    var name = _toSym(arg);
+    return _schemes.firstWhere((schema) => schema.name == name,
+        orElse: () =>
+            throw "No Schema found for $arg");
+  }
+  
   static Symbol _toSym(arg) {
     if (arg is String) return new Symbol(arg);
     if (arg is Symbol) return arg;
+    if (arg is Model) return reflectType(arg.runtimeType).qualifiedName;
     if (arg is Type) return reflectType(arg).qualifiedName;
     throw "Unsupported argument $arg";
   }

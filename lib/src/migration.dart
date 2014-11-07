@@ -1,7 +1,7 @@
 part of plink;
 
 
-class Migrator {
+class Migrator implements AdapterEndpoint {
   final DatabaseAdapter _adapter;
   var currentMigration = null;
 

@@ -1,6 +1,11 @@
 part of plink;
 
 
+abstract class AdapterEndpoint {
+  Future<DatabaseAdapter> getAdapter();
+}
+
+
 abstract class DatabaseAdapter {
   Future<List<Map<String, dynamic>>> where(String tableName,
       Map<String, dynamic> condition);
