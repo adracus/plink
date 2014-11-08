@@ -128,6 +128,12 @@ class SchemaIndex {
   }
   
   Set<Schema> get schemes => _schemes;
+  
+  Future dropAll() {
+    var f1 = Future.wait(schemes.map((schema) => schema.drop()));
+    var f2 = Future.wait(mappers.mappers.map((mapper) => mapper.drop()));
+    return Future.wait([f1, f2]);
+  }
 }
 
 

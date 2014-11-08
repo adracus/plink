@@ -1,5 +1,5 @@
 name: plink
-version: 0.0.4
+version: 0.0.5
 author: Axel Christ <adracus@gmail.com>
 description: Plink is an orm which focuses on easy to use implementation.
 homepage: https://github.com/Adracus/plink

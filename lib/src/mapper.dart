@@ -387,7 +387,7 @@ class MapMapper implements Mapper<Map> {
     if (_isEmptyMapResult(records)) return new Future.value({});
     return Future.wait(records.map((record) =>
         _loadPair(adapter, record))).then((pairs) {
-      return KeyValuePair.fromKeyValues(pairs);
+      return KeyValuePair.mapFromKeyValues(pairs);
     });
   }
   
@@ -426,16 +426,17 @@ class MapMapper implements Mapper<Map> {
     var valueTableName = str(_schemaFor(index, first.value).name);
     return adapter.insert(str(name), {"keyId": first.key.id, "keyTable": keyTableName,
       "valueId": first.value.id, "valueTable": valueTableName}).then((rec) {
-      if (pairs.length == 1) return new Future.value(rec["id"]);
+      var id = rec["id"];
+      if (pairs.length == 1) return new Future.value(id);
       var fs = [];
       for (int i = 1; i < pairs.length; i++) {
         keyTableName = str(_schemaFor(index, pairs[i].key).name);
         valueTableName = str(_schemaFor(index, pairs[i].value).name);
         fs.add(adapter.insert(str(name), {"keyId": pairs[i].key.id,
           "keyTable": keyTableName, "valueId": pairs[i].value.id,
-          "valueTable": valueTableName}));
+          "valueTable": valueTableName, "id": id}));
       }
-      return Future.wait(fs).then((_) => rec["id"]);
+      return Future.wait(fs).then((_) => id);
     });
   }
   
@@ -472,7 +473,7 @@ class KeyValuePair<K, V> {
     return $(map).flatten((key, value) => new KeyValuePair(key, value));
   }
   
-  static Map fromKeyValues(Iterable<KeyValuePair> keyValues) {
+  static Map mapFromKeyValues(Iterable<KeyValuePair> keyValues) {
     var result = {};
     keyValues.forEach((kvp) => result[kvp.key] = kvp.value);
     return result;
