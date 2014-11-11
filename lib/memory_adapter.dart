@@ -6,6 +6,9 @@ import 'package:plink/plink.dart';
 
 class MemoryAdapter implements DatabaseAdapter {
   Map<String, Table> _tableStore = {};
+  
+  Future<List<Map<String, dynamic>>>select(SelectStatement select) =>
+      throw new UnimplementedError();
 
   Future createTable(String tableName, List<DatabaseField> fields) {
     _tableStore[tableName] = new Table(tableName, fields);

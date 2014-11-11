@@ -3,6 +3,9 @@ library plink;
 import 'dart:mirrors';
 import 'dart:async';
 import 'package:u_til/u_til.dart';
+import 'package:plink/src/statement/statement.dart';
+
+export 'package:plink/src/statement/statement.dart';
 
 part 'src/adapter.dart';
 part 'src/mapper.dart';

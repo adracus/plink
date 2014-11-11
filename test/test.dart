@@ -19,15 +19,18 @@ main() {
 
   var model = new TestClass();
   model.aMap = {1: "one", 2: "two"};
-  
-  var test = select("*", from(["myTable", "yourTable"]), where(c("name").eq("Threaderic")));
-  var st = test.toPreparedStatement();
+  var test = select("*", from("plink.MapMapper"),
+      where(c("valueTable").eq("plink.StringMapper").and(c("keyTable").eq("plink.IntMapper"))));
 
   
   repo.save(model).then((model) {
     repo.find(TestClass, model.id).then((loaded) {
       print(loaded.aMap);
-      repo.index.dropAll();
+      
+      adapter.select(adapter.statementConverter.convertSelectStatement(test)).then((rows) {
+        print(rows);
+        repo.index.dropAll();
+      });
     });
   });
 }

@@ -20,6 +20,10 @@ abstract class DatabaseAdapter {
   Future delete(String tableName, Map<String, dynamic> condition);
   
   Future hasTable(String tableName);
+  
+  Future<List<Map<String, dynamic>>> select(PreparedStatement statement);
+  
+  StatementConverter get statementConverter;
 }
 
 class DatabaseField {

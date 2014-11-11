@@ -3,7 +3,10 @@ part of plink.statement;
 const select = const SelectStatementGenerator();
 
 
-List<String> from(arg) => arg is List ? arg : [arg];
+List<String> from(arg) {
+  arg = arg is List ? arg : [arg];
+  return arg.map((elem) => '"$elem"').toList();
+}
 
 
 InnerJoin innerJoin(String tableName, ColumnIdentifierPair pair) =>

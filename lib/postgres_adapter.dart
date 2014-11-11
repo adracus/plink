@@ -87,6 +87,12 @@ class PostgresAdapter implements DatabaseAdapter {
   }
   
   
+  Future<List<Map<String, dynamic>>> select(PreparedStatement statement) {
+    return _query(statement.sql, statement.values).then((rows) =>
+        transformRows(rows));
+  }
+  
+  
   Future<List<Map<String, dynamic>>> all(String tableName) {
     return _query("SELECT * FROM \"$tableName\"").then((rows) =>
         transformRows(rows));
@@ -178,4 +184,6 @@ class PostgresAdapter implements DatabaseAdapter {
     return _execute("ALTER TABLE \"$tableName\" DROP COLUMN " +
         "\"${removed.name}\"");
   }
+  
+  final StatementConverter statementConverter = new StatementConverter();
 }
