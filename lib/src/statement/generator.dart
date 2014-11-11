@@ -47,7 +47,7 @@ class StatementConverter {
   }
   
   PreparedStatement convertInnerJoin(InnerJoin innerJoin) {
-    var statement =  new PreparedStatement("INNER JOIN ${innerJoin.table} ON ");
+    var statement =  new PreparedStatement('INNER JOIN "${innerJoin.table}" ON ');
     var firstIdentifier = convertColumnIdentifier(innerJoin.first);
     var secondIdentifier = convertColumnIdentifier(innerJoin.second);
     return statement + firstIdentifier + "=" + secondIdentifier;
@@ -60,12 +60,21 @@ class StatementConverter {
   }
   
   PreparedStatement convertSelectAll(SelectAll selectAll) {
-    return new PreparedStatement("SELECT * FROM " +
+    var statement = new PreparedStatement("SELECT * FROM " +
         "${selectAll.tableIdentifier.join(", ")}");
+    if (null == selectAll.join) return statement;
+    var join = convertJoin(selectAll.join);
+    return statement + " " + join;
   }
   
   PreparedStatement convertSelectSome(SelectSome selectSome) {
-    throw new UnimplementedError();
+    var identifierString = selectSome.columns.map(convertColumnIdentifier)
+                                             .join(", ");
+    var statement = new PreparedStatement("SELECT $identifierString FROM " +
+        "${selectSome.tableIdentifier.join(", ")}");
+    if (null == selectSome.join) return statement;
+    var join = convertJoin(selectSome.join);
+    return statement + " " + join;
   }
   
   PreparedStatement convertWhereClause(WhereClause clause) {
@@ -73,7 +82,7 @@ class StatementConverter {
   }
   
   PreparedStatement convertColumnIdentifier(ColumnIdentifier identifier) {
-    return new PreparedStatement("${identifier.table}.${identifier.name}");
+    return new PreparedStatement('"${identifier.table}"."${identifier.name}"');
   }
   
   PreparedStatement convertWhereStatement(WhereStatement statement) {

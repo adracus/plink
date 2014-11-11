@@ -4,12 +4,15 @@ const ID = "id";
 const TARGET_ID = "targetId";
 const TARGET_TABLE = "targetTable";
 
+const PRIMITIVES = const[int, double, String, DateTime];
+
 
 class Relation implements WeakSchema {
   final SchemaIndex index;
   final Symbol sourceName;
   final Symbol qualifiedName;
   final Symbol simpleName;
+  final Type type;
   final FieldCombination fields = new FieldCombination(
       [new Field(const Symbol(ID), int, [KEY]),
        new Field(const Symbol(TARGET_ID), int, [KEY]),
@@ -18,7 +21,23 @@ class Relation implements WeakSchema {
   Relation.fromField(VariableMirror field, ClassMirror source, this.index)
       : sourceName = source.qualifiedName,
         simpleName = field.simpleName,
-        qualifiedName = field.qualifiedName;
+        qualifiedName = field.qualifiedName,
+        type = field.type.reflectedType;
+  
+  Future<Set<int>> where(value) {
+    if (!PRIMITIVES.contains(type)) throw "Only primitive types are supported";
+    return index.getAdapter().then((adapter) {
+      var schema = index.schemaFor(type);
+      var st = s.select([s.i(str(name), ID)], s.from(str(schema.name)), s.innerJoin(str(name),
+          s.on(s.i(str(name), TARGET_ID), s.i(str(schema.name), ID))),
+          s.where(s.c("value").eq(value)));
+      var preparedStatement = adapter.statementConverter.convertSelectStatement(st);
+      return adapter.select(preparedStatement).then((vals) {
+        return vals.map((row) => row[ID]).toSet();
+      });
+    });
+  }
+  
 
   Future find(int sourceId) => index.getAdapter().then((adapter) {
     return fetchRecord(adapter, sourceId).then((record) {
@@ -37,11 +56,6 @@ class Relation implements WeakSchema {
   Future valueFromRecord(Map<String, dynamic> record) =>
       index.schemaFor(record[TARGET_TABLE])
            .find(record[TARGET_ID]);
-  
-  
-  Future<List<int>> where(value) => index.getAdapter().then((adapter) {
-    
-  });
   
   
   Symbol get name => combineSymbols(sourceName, simpleName);

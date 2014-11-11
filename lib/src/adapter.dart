@@ -21,9 +21,9 @@ abstract class DatabaseAdapter {
   
   Future hasTable(String tableName);
   
-  Future<List<Map<String, dynamic>>> select(PreparedStatement statement);
+  Future<List<Map<String, dynamic>>> select(s.PreparedStatement statement);
   
-  StatementConverter get statementConverter;
+  s.StatementConverter get statementConverter;
 }
 
 class DatabaseField {

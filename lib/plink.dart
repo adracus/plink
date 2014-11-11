@@ -3,7 +3,7 @@ library plink;
 import 'dart:mirrors';
 import 'dart:async';
 import 'package:u_til/u_til.dart';
-import 'package:plink/src/statement/statement.dart';
+import 'package:plink/src/statement/statement.dart' as s;
 
 export 'package:plink/src/statement/statement.dart';
 

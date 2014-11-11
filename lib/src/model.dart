@@ -81,6 +81,7 @@ class ModelSchema implements StrongSchema<Model> {
       var inst = Model.defaultInstanceMirror(clazz);
       values.forEach((key, value) =>
           inst.setField(key, value));
+      inst.setField(#id, id);
       return inst.reflectee;
     });
   }
@@ -153,6 +154,17 @@ class ModelSchema implements StrongSchema<Model> {
       return adapter.delete(str(name), {"id": id});
     });
   });
+  
+  
+  Future where(Map<Symbol, dynamic> values) {
+    var searchFields = values.keys.map((name) =>
+        relations.firstWhere((rel) => rel.simpleName == name));
+    var searches = searchFields.map((field) => field.where(values[field.simpleName]));
+    return Future.wait(searches).then((List<Set<int>> idSets) {
+      var ids = idSets.reduce((s1, s2) => s1.intersection(s2));
+      return Future.wait(ids.map(find));
+    });
+  }
   
   
   Future<bool> exists(DatabaseAdapter adapter, int id) =>

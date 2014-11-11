@@ -31,6 +31,9 @@ class ModelRepository {
     return clazz.metadata.map((meta) => meta.reflectee).contains(ignore);
   }
   
+  Future<List<Model>> where(Type type, Map<Symbol, dynamic> values) =>
+      index.modelSchemaFor(type).where(values);
+  
   
   Future<Model> save(Model model) =>
       index.modelSchemaFor(model).save(model);

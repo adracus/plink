@@ -1,8 +1,8 @@
 import 'package:plink/plink.dart';
 import 'package:plink/postgres_adapter.dart';
-import 'package:plink/src/statement/statement.dart';
 
 class TestClass extends Model {
+  String name;
   Map aMap;
   
   TestClass();
@@ -18,17 +18,18 @@ main() {
   var repo = new ModelRepository.global(adapter);
 
   var model = new TestClass();
+  model.name = "Test";
   model.aMap = {1: "one", 2: "two"};
-  var test = select("*", from("plink.MapMapper"),
-      where(c("valueTable").eq("plink.StringMapper").and(c("keyTable").eq("plink.IntMapper"))));
-
+  var model2 = new TestClass();
+  model2.name = "Not Test";
+  model2.aMap = {2: "two", "three": 3};
   
-  repo.save(model).then((model) {
-    repo.find(TestClass, model.id).then((loaded) {
+  repo.saveMany([model, model2]).then((models) {
+    repo.find(TestClass, models.first.id).then((loaded) {
       print(loaded.aMap);
       
-      adapter.select(adapter.statementConverter.convertSelectStatement(test)).then((rows) {
-        print(rows);
+      repo.where(TestClass, {#name: "Test"}).then((rows) {
+        print(rows.map((row) => row.name).join(", "));
         repo.index.dropAll();
       });
     });
