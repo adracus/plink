@@ -8,13 +8,15 @@ Preparation
 
 ### Adapters
 
-To use plink, you need to instantiate a database adapter and pass it to the
-global `REPO` object. plink is shipped with a postgres adapter, which can be
-instantiated as follows:
+To use plink, you need to instantiate a database adapter. This adapter should then
+be passed to a `ModelRepository` object, which takes care of the most important
+things for you. An example:
 
 ```dart
-REPO.adapter =
-  new PostgresAdapter("postgres://<username>:<password>@<host>:<port>/<database>");
+var adapter = new PostgresAdapter(
+  "postgres://<username>:<password>@<host>:<port>/<database>");
+  
+var repo = new ModelRepository.global(adapter);
 ```
 
 ### Subclassing
@@ -67,14 +69,6 @@ class Person {
 Functionality
 -------------
 
-To use all this functionality with ease, you should first instantiate a `ModelRepository`.
-This object will then take care of all operations targeting your models. To do so, proceed
-as follows:
-
-```dart
-var repo = new ModelRepository.global(adapter);
-```
-
 ### Saving
 
 To persist such a Name object, instantiate it and then call the `ModelRepository.save()`
@@ -94,10 +88,16 @@ mentioned case it would be `Name`). This returns a future with the desired model
 
 ### Finding by specific criteria
 
-To find models by specific criteria, call the `where(Type type, Map<String, dynamic> condition)`
-method on the `REPO` object. This will return a future with the desired models. Currently,
-conditions can only be exact values (a map with field name and exact value). This is planned
-to be improved.
+A list of model instances can be fetched by using the `ModelRepository.where` method.
+This method takes a type and a so called `WhereStatement`. These statements can be
+created with ease, an example would be:
+
+```dart
+repo.where(TestClass, c("name").eq("Test"))
+```
+
+Currently supported matchers here are equals, not equals, greater than, less than,
+greater than or equals and less than or equals.
 
 
 Pull requests are highly appreciated!

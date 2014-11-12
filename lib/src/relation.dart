@@ -24,13 +24,14 @@ class Relation implements WeakSchema {
         qualifiedName = field.qualifiedName,
         type = field.type.reflectedType;
   
-  Future<Set<int>> where(value) {
+  
+  Future<Set<int>> where(s.Operator operator) {
     if (!PRIMITIVES.contains(type)) throw "Only primitive types are supported";
     return index.getAdapter().then((adapter) {
       var schema = index.schemaFor(type);
       var st = s.select([s.i(str(name), ID)], s.from(str(schema.name)), s.innerJoin(str(name),
           s.on(s.i(str(name), TARGET_ID), s.i(str(schema.name), ID))),
-          s.where(s.c("value").eq(value)));
+          s.where(operator..identifier = s.c("value")));
       var preparedStatement = adapter.statementConverter.convertSelectStatement(st);
       return adapter.select(preparedStatement).then((vals) {
         return vals.map((row) => row[ID]).toSet();

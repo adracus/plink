@@ -111,41 +111,41 @@ class Column {
 }
 
 abstract class Operator implements WhereStatement {
-  final Column identifier;
-  final value;
+  Column identifier;
+  var value;
   
-  const Operator(this.identifier, this.value);
+  Operator(this.identifier, this.value);
   
   AndCombinator and(Operator other) => new AndCombinator(this, other);
   OrCombinator or(Operator other) => new OrCombinator(this, other);
 }
 
 class Equals extends Operator {
-  const Equals(Column identifier, value)
+  Equals(Column identifier, value)
       : super(identifier, value);
 }
 
 class NotEquals extends Operator {
-  const NotEquals(Column identifier, value)
+  NotEquals(Column identifier, value)
       : super(identifier, value);
 }
 
 class GreaterThan extends Operator {
-  const GreaterThan(Column identifier, value)
+  GreaterThan(Column identifier, value)
       : super(identifier, value);
 }
 
 class LessThan extends Operator {
-  const LessThan(Column identifier, value)
+  LessThan(Column identifier, value)
       : super(identifier, value);
 }
 
 class GreaterThanOrEquals extends Operator {
-  const GreaterThanOrEquals(Column identifier, value)
+  GreaterThanOrEquals(Column identifier, value)
       : super(identifier, value);
 }
 
 class LessThanOrEquals extends Operator {
-  const LessThanOrEquals(Column identifier, value)
+  LessThanOrEquals(Column identifier, value)
       : super(identifier, value);
 }

@@ -37,14 +37,6 @@ main() {
   });
   
   group("SchemaIndex", () {
-    test("Index creation", () {
-      var migrator = new MockMigrator();
-      migrator.when(callsTo("migrate")).thenReturn(null);
-      
-      var schemaIndex = new SchemaIndex([], migrator);
-      expect(() => migrator.getLogs(callsTo("migrate")).verify(happenedOnce),
-          returnsNormally);
-    });
     
     test("Index schema for", () {
       var migrator = new MockMigrator()
@@ -62,10 +54,9 @@ main() {
       var migrator = new MockMigrator()
                           ..when(callsTo("migrate")).thenReturn(null);
       var schemaIndex = new SchemaIndex([reflectClass(MyModel)], migrator);
-      var totalMapperLength = schemaIndex.mappers.mappers.length;
       
       // 4 because of name, created_at, updated_at, MyModel
-      expect(schemaIndex.allSchemes.length, equals(totalMapperLength + 4));
+      expect(schemaIndex.schemes.length, equals(1));
     });
   });
 }

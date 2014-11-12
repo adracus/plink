@@ -1,5 +1,6 @@
 import 'package:plink/plink.dart';
 import 'package:plink/postgres_adapter.dart';
+import 'package:unittest/unittest.dart';
 
 class TestClass extends Model {
   String name;
@@ -28,8 +29,8 @@ main() {
     repo.find(TestClass, models.first.id).then((loaded) {
       print(loaded.aMap);
       
-      repo.where(TestClass, {#name: "Test"}).then((rows) {
-        print(rows.map((row) => row.name).join(", "));
+      repo.where(TestClass, c("name").eq("Test").or(c("name").eq("Not Test"))).then((models) {
+        models.forEach((model) => print(model.name));
         repo.index.dropAll();
       });
     });

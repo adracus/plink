@@ -156,14 +156,32 @@ class ModelSchema implements StrongSchema<Model> {
   });
   
   
-  Future where(Map<Symbol, dynamic> values) {
-    var searchFields = values.keys.map((name) =>
-        relations.firstWhere((rel) => rel.simpleName == name));
-    var searches = searchFields.map((field) => field.where(values[field.simpleName]));
-    return Future.wait(searches).then((List<Set<int>> idSets) {
-      var ids = idSets.reduce((s1, s2) => s1.intersection(s2));
-      return Future.wait(ids.map(find));
-    });
+  Future where(s.WhereStatement statement) {
+    return _evaluateWhereStatement(statement).then((ids) =>
+        Future.wait((ids.map(find))));
+  }
+  
+  
+  Future<Set<int>> _evaluateWhereStatement(s.WhereStatement statement) {
+    if (statement is s.Operator) {
+      var relation = _relationWithName(statement.identifier.name);
+      return relation.where(statement);
+    }
+    if (statement is s.Combinator) {
+      return Future.wait([_evaluateWhereStatement(statement.first),
+                          _evaluateWhereStatement(statement.second)]).then((sets) {
+        if (statement is s.AndCombinator) {
+          return sets.reduce((Set s1, Set s2) => s1.intersection(s2));
+        }
+        return sets.fold(new Set(), (s1, s2) => s1..addAll(s2));
+      });
+    }
+    throw "Unknown statement $statement";
+  }
+  
+  
+  Relation _relationWithName(String name) {
+    return relations.firstWhere((relation) => str(relation.simpleName) == name);
   }
   
   
