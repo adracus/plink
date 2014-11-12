@@ -209,6 +209,22 @@ class SymbolMapper extends Object with ConvertMapper<Symbol, String> {
 }
 
 
+class UriMapper extends Object with ConvertMapper<Uri, String> {
+  static final Symbol className = reflectClass(UriMapper).qualifiedName;
+  final Type coveredType = Uri;
+  final SchemaIndex index;
+  
+  UriMapper(this.index);
+  
+  Uri decode(String element) => Uri.parse(element);
+  String encode(Uri element) => element.toString();
+  
+  Symbol get name => className;
+  
+  bool matches(Type type) => Uri == type;
+}
+
+
 class ListMapper implements Mapper<List> {
   static final Symbol className = reflectClass(ListMapper).qualifiedName;
   final SchemaIndex index;
