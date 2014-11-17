@@ -25,7 +25,7 @@ main() {
   model2.name = "Not Test";
   model2.aMap = {2: "two", "three": 3};
   
-  repo.saveMany([model, model2]).then((models) {
+  repo.saveMany([model, model2], deep: true).then((models) {
     repo.find(TestClass, models.first.id).then((loaded) {
       print(loaded.aMap);
       

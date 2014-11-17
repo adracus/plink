@@ -1,7 +1,7 @@
 part of plink;
 
 StrongSchema _schemaFor(SchemaIndex index, arg) {
-  if (arg is! Identifyable) throw new ArgumentError();
+  if (arg is! Identifyable) throw new ArgumentError("$arg is not supported");
   if (arg is Mapped) return index.schemaFor(arg.value.runtimeType);
   return index.schemaFor(arg.runtimeType);
 }
@@ -17,7 +17,7 @@ abstract class Mapper<T> implements StrongSchema {
   SchemaIndex get index;
   
   Future<T> find(int id);
-  Future<Mapped<T>> save(T element);
+  Future<Mapped<T>> save(T element, {bool deep: false});
   
   static Type getMapperType(Mapper mapper) {
     var clazz = reflect(mapper).type;
@@ -54,7 +54,8 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
   
   Type get valueType;
   
-  Future<Mapped<T>> save(T element) => index.getAdapter().then((adapter) {
+  Future<Mapped<T>> save(T element, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
     return adapter.insert(str(name), {"value": element}).then((res) {
       var id = res["id"];
       var value = res["value"];
@@ -68,7 +69,8 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
     });
   });
   
-  Future delete(int id) => index.getAdapter().then((adapter) {
+  Future delete(int id, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
     return adapter.delete(str(name), {"id": id});
   });
   
@@ -100,15 +102,16 @@ abstract class ConvertMapper<T, E> implements Mapper<T> {
   
   bool get needsPersistance => false;
   
-  Future<Mapped<T>> save(T element) {
-    return coveredSchema.save(encode(element)).then((mapped) =>
+  Future<Mapped<T>> save(T element, {bool deep: false}) {
+    return coveredSchema.save(encode(element), deep: deep).then((mapped) =>
         new Mapped(mapped.id, decode(mapped.value)));
   }
   
   Future<T> find(int id) => coveredSchema.find(id)
     .then((loaded) => decode(loaded));
   
-  Future delete(int id) => coveredSchema.delete(id);
+  Future delete(int id, {bool deep: false}) =>
+      coveredSchema.delete(id, deep: deep);
   
   Future<List<T>> all() => coveredSchema.all()
       .then((loaded) => loaded.map((E element) => decode(element)).toList());
@@ -173,13 +176,13 @@ class NullMapper implements Mapper<Null> {
   FieldCombination get fields => new FieldCombination(
           [new Field(#id, int, [KEY])]);
   
-  Future<Mapped<Null>> save(Null element) =>
+  Future<Mapped<Null>> save(Null element, {bool deep: false}) =>
       new Future.value(new Mapped<Null>(1, null));
   
   
   Future<Null> find(int id) => new Future.value(null);
   
-  Future delete(int id) => new Future.value();
+  Future delete(int id, {bool deep: false}) => new Future.value();
   
   Symbol get name => className;
   
@@ -237,15 +240,28 @@ class ListMapper implements Mapper<List> {
        new Field(#targetTable, String, [KEY]),
        new Field(#targetId, int, [KEY])]);
   
-  Future<Mapped<List>> save(List element) => index.getAdapter().then((adapter) {
+  Future<Mapped<List>> save(List element, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
     var fs = [];
     for (int i = 0; i < element.length; i++) {
-      var schema = index.schemaFor(element[i].runtimeType) as StrongSchema;
-      fs.add(schema.save(element[i]));
+      fs.add(_saveSingle(adapter, element[i]));
     }
     return Future.wait(fs).then(_persistListLink).then((id) =>
         new Mapped<List>(id, element));
   });
+  
+  Future<Identifyable> _saveSingle(DatabaseAdapter adapter, element, {bool deep: false}) {
+    var schema = index.schemaFor(element.runtimeType) as StrongSchema;
+    if (!deep) { // If non deep, check for models to be saved
+      if (element is Model) {
+        if (element.id == null) // Non-Persisted model
+          throw "No non-Deep save for unsaved model"; // means an error if non-deep
+        return (new Future.value(element)); // No saving or updating for models
+      }
+      return schema.save(element, deep: deep); // Primitive values ar saved
+    }
+    return schema.save(element, deep: deep); // If deep, always save(persisted ones will be updated)
+  }
   
   Future<int> _persistListLink(List<Identifyable> element) => index.getAdapter().then((adapter) {
     if (element.length == 0) return adapter.insert(str(name), {"index": 0,
@@ -269,14 +285,20 @@ class ListMapper implements Mapper<List> {
       "targetId": element.id});
   }
   
-  Future delete(int id) => index.getAdapter().then((adapter) { //TODO: Should all items
-    return adapter.where(str(name), {"id": id}).then((rows) {  //Be deleted ??
-      if (_isEmptyListResult(rows)) return adapter.delete(str(name), {"id": id});
-      return Future.wait(rows.map((row) => _deleteRow(adapter, row))).then((_) {
-        return adapter.delete(str(name), {"id": id});
-      });
+  Future delete(int id, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
+    if (!deep) return deleteListLink(adapter, id);
+    return adapter.where(str(name), {"id": id}).then((rows) {
+      if (_isEmptyListResult(rows)) return deleteListLink(adapter, id);
+      return Future.wait(rows.map((row) => _deleteItem(adapter, row, deep: deep)))
+          .then((_) =>
+              deleteListLink(adapter, id));
     });
   });
+  
+  Future deleteListLink(DatabaseAdapter adapter, int id) {
+    return adapter.delete(str(name), {"id": id});
+  }
   
   Future<List<List>> all() => index.getAdapter().then((adapter) {
     return adapter.where(str(name), {}).then((records) {
@@ -313,8 +335,9 @@ class ListMapper implements Mapper<List> {
   }
   
   
-  Future _deleteRow(DatabaseAdapter adapter, Map<String, dynamic> row) {
-    return index.schemaFor(row["targetTable"]).delete(row["targetId"]);
+  Future _deleteItem(DatabaseAdapter adapter, Map<String, dynamic> row,
+                    {bool deep: false}) {
+    return index.schemaFor(row["targetTable"]).delete(row["targetId"], deep: deep);
   }
   
   
@@ -424,16 +447,21 @@ class MapMapper implements Mapper<Map> {
                             && rows.single["valueId"] == 0;
   }
   
-  Future<Mapped<Map>> save(Map element) => index.getAdapter().then((adapter) {
-    if (0 == element.length) return adapter.insert(str(name), {"keyId": 0,
-      "keyTable": "", "valueId": 0, "valueTable": ""}).then((savedRow) {
-      return new Mapped(savedRow["id"], {});
-    });
+  Future<Mapped<Map>> save(Map element, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
+    if (0 == element.length) return _saveEmptyMapLink(adapter);
     var pairs = KeyValuePair.flattenMap(element);
     return Future.wait(pairs.map((pair) => _savePair(adapter, pair))).then((savedPairs) {
       return _saveMapLink(adapter, savedPairs).then((id) => new Mapped(id, element));
     });
   });
+  
+  Future<int> _saveEmptyMapLink(DatabaseAdapter adapter) {
+    return adapter.insert(str(name), {"keyId": 0,
+      "keyTable": "", "valueId": 0, "valueTable": ""}).then((savedRow) {
+      return new Mapped(savedRow["id"], {});
+    });
+  }
   
   Future<int> _saveMapLink(DatabaseAdapter adapter,
       List<KeyValuePair<Identifyable, Identifyable>> pairs) {
@@ -458,19 +486,48 @@ class MapMapper implements Mapper<Map> {
   
   
   Future<KeyValuePair<Identifyable, Identifyable>>
-  _savePair(DatabaseAdapter adapter, KeyValuePair pair) {
-    var key, value;
+  _savePair(DatabaseAdapter adapter, KeyValuePair pair, {bool deep: false}) {
     var fs = [];
-    var keySchema = index.schemaFor(pair.key.runtimeType) as StrongSchema;
-    var valueSchema = index.schemaFor(pair.value.runtimeType) as StrongSchema;
-    fs.add(keySchema.save(pair.key).then((saved) => key = saved));
-    fs.add(valueSchema.save(pair.value).then((saved) => value = saved));
+    var key, value;
+    fs.add(_saveSingle(adapter, pair.key, deep: deep)
+        .then((ident) => key = ident));
+    fs.add(_saveSingle(adapter, pair.key, deep: deep)
+        .then((ident) => value = ident));
     return Future.wait(fs).then((_) => new KeyValuePair(key, value));
   }
   
-  Future delete(int id) => index.getAdapter().then((adapter) {
-    adapter.delete(str(name), {"id": id});
+  Future<Identifyable> _saveSingle(DatabaseAdapter adapter, element, {bool deep: false}) {
+    var schema = index.schemaFor(element.runtimeType) as StrongSchema;
+    if (!deep) { // If non deep, check for models to be saved
+      if (element is Model) {
+        if (element.id == null) // Non-Persisted model
+          throw "No non-Deep save for unsaved model"; // means an error if non-deep
+        return (new Future.value(element)); // No saving or updating for models
+      }
+      return schema.save(element, deep: deep); // Primitive values ar saved
+    }
+    return schema.save(element, deep: deep); // If deep, always save(persisted ones will be updated)
+  }
+  
+  Future delete(int id, {bool deep: false}) => index.getAdapter().then((adapter) {
+    if (!deep) return _deleteMapLink(adapter, id);
+    return adapter.where(str(name), {"id": id}).then((rows) =>
+        rows.map((row) => _deleteRow(adapter, row, deep: deep).then((_) =>
+            _deleteMapLink(adapter, id))));
   });
+  
+  Future _deleteRow(DatabaseAdapter adapter, Map<String, dynamic> row, {bool deep: false}) {
+    var fs = []; // TODO: Should the model be recreated for lifecycle methods?
+    var keySchema = index.schemaFor(row["keyTable"]);
+    var valueSchema = index.schemaFor(row["valueTable"]);
+    fs.add(keySchema.delete(row["keyId"], deep: deep));
+    fs.add(valueSchema.delete(row["valueId"], deep: deep));
+    return Future.wait(fs);
+  }
+  
+  Future _deleteMapLink(DatabaseAdapter adapter, int id) {
+    return adapter.delete(str(name), {"id": id});
+  }
   
   Future drop() =>
       index.getAdapter().then((adapter) => adapter.dropTable(str(name)));

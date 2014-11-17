@@ -61,25 +61,30 @@ class Relation implements WeakSchema {
   
   Symbol get name => combineSymbols(sourceName, simpleName);
   
-  Future save(int sourceId, element) => index.getAdapter().then((adapter) {
+  Future save(int sourceId, element, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
+    if (null == sourceId) throw "Source id cannot be null";
     var schema = index.schemaFor(element.runtimeType) as StrongSchema;
-    return (null == sourceId ? new Future.value() : delete(sourceId)).then((_) =>
-        schema.save(element).then((saved) {
+    schema.save(element, deep: deep).then((saved) {
       return adapter.insert(str(name), {ID: sourceId, TARGET_ID: saved.id,
                                         TARGET_TABLE: str(schema.name)})
                     .then((_) => element);
-    }));
-  });
-  
-  
-  Future delete(int sourceId) => index.getAdapter().then((adapter) {
-    return fetchRecord(adapter, sourceId).then((record) {
-      if (record == null) return new Future.value();
-      return index.schemaFor(record[TARGET_TABLE]).delete(record[TARGET_ID]).then((_) {
-        return adapter.delete(str(name), {ID: sourceId});
-      });
     });
   });
+  
+  
+  Future delete(int sourceId, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
+    if (!deep) return _deleteRelationLink(adapter, sourceId);
+    return fetchRecord(adapter, sourceId).then((record) {
+      return index.schemaFor(record[TARGET_TABLE]).delete(record[TARGET_ID])
+          .then((_) => _deleteRelationLink(adapter, sourceId));
+    });
+  });
+  
+  Future _deleteRelationLink(DatabaseAdapter adapter, int sourceId) {
+    return adapter.delete(str(name), {ID: sourceId});
+  }
   
   Future<Map<String, dynamic>> fetchRecord(DatabaseAdapter adapter, int sourceId) =>
       adapter.where(str(name), {ID: sourceId}).then((results) => 1 == results.length ?

@@ -15,14 +15,13 @@ abstract class Schema<E> {
 
   Future<E> find(int id);
   Future<List<E>> all();
-  Future delete(int id);
+  Future delete(int id, {bool deep: false});
   Future drop();
 }
 
 
 abstract class WeakSchema<E> implements Schema<E> {
-  Future<E> save(int sourceId, E element);
-  Future delete(int sourceId);
+  Future<E> save(int sourceId, E element, {bool deep: false});
 }
 
 
@@ -32,8 +31,7 @@ abstract class Identifyable {
 
 
 abstract class StrongSchema<E extends Identifyable> implements Schema<E>{
-  Future<E> save(E element);
-  Future delete(int id);
+  Future<E> save(E element, {bool deep: false});
 }
 
 

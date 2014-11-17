@@ -36,18 +36,18 @@ class ModelRepository {
       index.modelSchemaFor(type).where(statement);
   
   
-  Future<Model> save(Model model) =>
-      index.modelSchemaFor(model).save(model);
+  Future<Model> save(Model model, {bool deep: false}) =>
+      index.modelSchemaFor(model).save(model, deep: deep);
   
   
-  Future<List<Model>> saveMany(List<Model> models) =>
-      Future.wait(models.map(save));
+  Future<List<Model>> saveMany(List<Model> models, {bool deep: false}) =>
+      Future.wait(models.map((model) => save(model, deep: deep)));
   
-  Future delete(Model model) =>
-      index.modelSchemaFor(model).deleteModel(model);
+  Future delete(Model model, {bool deep: false}) =>
+      index.modelSchemaFor(model).deleteModel(model, deep: deep);
   
-  Future deleteMany(List<Model> models) =>
-      Future.wait(models.map(delete));
+  Future deleteMany(List<Model> models, {bool deep: false}) =>
+      Future.wait(models.map((model) => delete(model, deep: deep)));
   
   Future<Model> find(Type type, int id) =>
       index.modelSchemaFor(type).find(id);

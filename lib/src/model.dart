@@ -87,20 +87,21 @@ class ModelSchema implements StrongSchema<Model> {
   }
   
 
-  Future<Model> save(Model model) => index.getAdapter().then((adapter) {
-    if (null == model.id) return insert(model);
-    return update(model);
+  Future<Model> save(Model model, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
+    if (null == model.id) return insert(model, deep: deep);
+    return update(model, deep: deep);
   });
   
   
-  Future<Model> insert(Model model) {
+  Future<Model> insert(Model model, {bool deep: false}) {
     model.beforeCreate();
     return index.getAdapter().then((adapter) {
       model.updatedAt = new DateTime.now();
       model.createdAt = new DateTime.now();
       return adapter.insert(str(name), {}).then((saved) {
         model.id = saved["id"];
-        return saveRelations(model).then((savedRelations) =>
+        return saveRelations(model, deep: deep).then((savedRelations) =>
             updateModelWithRelations(model, savedRelations))
             .then((updated) => updated..afterCreate());
       });
@@ -108,20 +109,20 @@ class ModelSchema implements StrongSchema<Model> {
   }
   
   
-  Future<Model> update(Model model) {
+  Future<Model> update(Model model, {bool deep: false}) {
     model.beforeUpdate();
     model.updatedAt = new DateTime.now();
-    return saveRelations(model).then((savedRelations) =>
+    return saveRelations(model, deep: deep).then((savedRelations) =>
         updateModelWithRelations(model, savedRelations))
         .then((updated) => updated..afterUpdate());
   }
   
   
-  Future<Map<Symbol, dynamic>> saveRelations(Model model) =>
+  Future<Map<Symbol, dynamic>> saveRelations(Model model, {bool deep: false}) =>
       index.getAdapter().then((adapter) {
     var result = {};
     return Future.wait(relations.map((relation) =>
-        relation.save(model.id, getRelationField(relation, model))
+        relation.save(model.id, getRelationField(relation, model), deep: deep)
                 .then((savedItem) => result[relation.simpleName] = savedItem)))
           .then((_) => result);
   });
@@ -141,16 +142,17 @@ class ModelSchema implements StrongSchema<Model> {
   }
   
   
-  Future deleteModel(Model model) {
+  Future deleteModel(Model model, {bool deep: false}) {
     if (null == model.id) throw new ArgumentError("Model has to be persisted");
     model.beforeDelete();
-    return delete(model.id).then((_) => model.afterDelete());
+    return delete(model.id, deep: deep).then((_) => model.afterDelete());
   }
   
   
-  Future delete(int id) => index.getAdapter().then((adapter) {
+  Future delete(int id, {bool deep: false}) =>
+      index.getAdapter().then((adapter) {
     if (null == id) throw new ArgumentError("id cannot be null");
-    return Future.wait(relations.map((rel) => rel.delete(id))).then((_) {
+    return Future.wait(relations.map((rel) => rel.delete(id, deep: deep))).then((_) {
       return adapter.delete(str(name), {"id": id});
     });
   });
