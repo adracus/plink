@@ -65,7 +65,7 @@ class Relation implements WeakSchema {
       index.getAdapter().then((adapter) {
     if (null == sourceId) throw "Source id cannot be null";
     var schema = index.schemaFor(element.runtimeType) as StrongSchema;
-    schema.save(element, deep: deep).then((saved) {
+    return schema.save(element, deep: deep).then((saved) {
       return adapter.insert(str(name), {ID: sourceId, TARGET_ID: saved.id,
                                         TARGET_TABLE: str(schema.name)})
                     .then((_) => element);

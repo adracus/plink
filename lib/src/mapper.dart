@@ -491,7 +491,7 @@ class MapMapper implements Mapper<Map> {
     var key, value;
     fs.add(_saveSingle(adapter, pair.key, deep: deep)
         .then((ident) => key = ident));
-    fs.add(_saveSingle(adapter, pair.key, deep: deep)
+    fs.add(_saveSingle(adapter, pair.value, deep: deep)
         .then((ident) => value = ident));
     return Future.wait(fs).then((_) => new KeyValuePair(key, value));
   }
