@@ -99,6 +99,8 @@ class Column {
   
   Equals eq(other) => new Equals(this, other);
   
+  NotEquals neq(other) => new NotEquals(this, other);
+  
   GreaterThan gt(other) => new GreaterThan(this, other);
   
   LessThan lt(other) => new LessThan(this, other);

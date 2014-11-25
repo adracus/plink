@@ -102,6 +102,11 @@ class SchemaIndex {
   
   MapperFramework get mappers => _mappers;
   
+  List<Schema> schemesFor(Type type) {
+    return _schemes.where((schema) =>
+        reflectType(schema.type).isAssignableTo(reflectType(type))).toList();
+  }
+  
   Schema schemaFor(arg) {
     var mapper = mappers.mapperFor(arg, orElse: () => null);
     if (mapper != null) return mapper;

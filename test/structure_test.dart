@@ -1,7 +1,4 @@
-import "dart:mirrors" show reflectClass;
-import "package:mock/mock.dart";
-import "package:unittest/unittest.dart";
-import "package:plink/plink.dart";
+part of plink.test;
 
 @proxy
 class MockMigrator extends Mock implements Migrator {
@@ -19,7 +16,7 @@ class MyModel extends Model {
 }
 
 
-main() {
+structure_test() {
   group("FieldCombination", () {
     test("No key field error", () {
       expect(() => new FieldCombination([]), throwsArgumentError);

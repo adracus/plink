@@ -65,7 +65,7 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
   
   Future<T> find(int id) => index.getAdapter().then((adapter) {
     return adapter.where(str(name), {"id": id}).then((res) {
-      return res.single["value"];
+      return res["value"];
     });
   });
   
@@ -90,10 +90,8 @@ abstract class PrimitiveMapper<T> implements Mapper<T> {
 abstract class ConvertMapper<T, E> implements Mapper<T> {
   SchemaIndex get index;
   
-  Type get coveredType;
-  
   FieldCombination get fields => new FieldCombination._empty();
-  StrongSchema get coveredSchema => index.schemaFor(coveredType);
+  Mapper get coveredMapper;
   
   Future drop() => new Future.value();
   
@@ -103,17 +101,17 @@ abstract class ConvertMapper<T, E> implements Mapper<T> {
   bool get needsPersistance => false;
   
   Future<Mapped<T>> save(T element, {bool deep: false}) {
-    return coveredSchema.save(encode(element), deep: deep).then((mapped) =>
+    return coveredMapper.save(encode(element), deep: deep).then((mapped) =>
         new Mapped(mapped.id, decode(mapped.value)));
   }
   
-  Future<T> find(int id) => coveredSchema.find(id)
+  Future<T> find(int id) => coveredMapper.find(id)
     .then((loaded) => decode(loaded));
   
   Future delete(int id, {bool deep: false}) =>
-      coveredSchema.delete(id, deep: deep);
+      coveredMapper.delete(id, deep: deep);
   
-  Future<List<T>> all() => coveredSchema.all()
+  Future<List<T>> all() => coveredMapper.all()
       .then((loaded) => loaded.map((E element) => decode(element)).toList());
 }
 
@@ -124,10 +122,23 @@ class StringMapper extends Object with PrimitiveMapper<String> {
   
   StringMapper(this.index);
   
-  Type get valueType => String;
+  final Type valueType = String;
   Symbol get name => className;
   
   bool matches(Type type) => String == type;
+}
+
+
+class BoolMapper extends Object with PrimitiveMapper<bool> {
+  static final Symbol className = reflectClass(BoolMapper).qualifiedName;
+  final SchemaIndex index;
+  
+  BoolMapper(this.index);
+  
+  final Type valueType = bool;
+  Symbol get name => className;
+  
+  bool matches(Type type) => bool == type;
 }
 
 
@@ -137,7 +148,7 @@ class DoubleMapper extends Object with PrimitiveMapper<double> {
   
   DoubleMapper(this.index);
   
-  Type get valueType => double;
+  final Type valueType = double;
   Symbol get name => className;
   bool matches(Type type) => double == type;
 }
@@ -146,10 +157,10 @@ class DoubleMapper extends Object with PrimitiveMapper<double> {
 class IntMapper extends PrimitiveMapper<int> {
   static final Symbol className = reflectClass(IntMapper).qualifiedName;
   final SchemaIndex index;
+  final Type valueType = int;
   
   IntMapper(this.index);
   
-  Type get valueType => int;
   Symbol get name => className;
   bool matches(Type type) => int == type;
 }
@@ -197,10 +208,12 @@ class NullMapper implements Mapper<Null> {
 
 class SymbolMapper extends Object with ConvertMapper<Symbol, String> {
   static final Symbol className = reflectClass(SymbolMapper).qualifiedName;
-  final Type coveredType = String;
+  final Mapper coveredMapper;
   final SchemaIndex index;
   
-  SymbolMapper(this.index);
+  SymbolMapper(SchemaIndex index)
+      : index = index,
+        coveredMapper = new StringMapper(index);
   
   Symbol decode(String element) => new Symbol(element);
   String encode(Symbol element) => str(element);
@@ -208,16 +221,18 @@ class SymbolMapper extends Object with ConvertMapper<Symbol, String> {
   Symbol get name => className;
   
   bool matches(Type type) =>
-      reflectType(type).isSubtypeOf(reflectType(Symbol));
+      reflectType(type).isAssignableTo(reflectType(Symbol));
 }
 
 
 class UriMapper extends Object with ConvertMapper<Uri, String> {
   static final Symbol className = reflectClass(UriMapper).qualifiedName;
-  final Type coveredType = Uri;
+  final Mapper coveredMapper;
   final SchemaIndex index;
   
-  UriMapper(this.index);
+  UriMapper(SchemaIndex index)
+      : index = index,
+        coveredMapper = new StringMapper(index);
   
   Uri decode(String element) => Uri.parse(element);
   String encode(Uri element) => element.toString();
@@ -244,7 +259,7 @@ class ListMapper implements Mapper<List> {
       index.getAdapter().then((adapter) {
     var fs = [];
     for (int i = 0; i < element.length; i++) {
-      fs.add(_saveSingle(adapter, element[i]));
+      fs.add(_saveSingle(adapter, element[i], deep: deep));
     }
     return Future.wait(fs).then(_persistListLink).then((id) =>
         new Mapped<List>(id, element));
@@ -252,13 +267,13 @@ class ListMapper implements Mapper<List> {
   
   Future<Identifyable> _saveSingle(DatabaseAdapter adapter, element, {bool deep: false}) {
     var schema = index.schemaFor(element.runtimeType) as StrongSchema;
-    if (!deep) { // If non deep, check for models to be saved
-      if (element is Model) {
+    if (!deep) { // If non deep, check for identifyables to be saved
+      if (element is Identifyable) {
         if (element.id == null) // Non-Persisted model
           throw "No non-Deep save for unsaved model"; // means an error if non-deep
         return (new Future.value(element)); // No saving or updating for models
       }
-      return schema.save(element, deep: deep); // Primitive values ar saved
+      return schema.save(element, deep: deep); // Primitive values are saved
     }
     return schema.save(element, deep: deep); // If deep, always save(persisted ones will be updated)
   }
@@ -358,23 +373,25 @@ class ListMapper implements Mapper<List> {
   Future drop() =>
       index.getAdapter().then((adapter) => adapter.dropTable(str(name)));
   
-  bool matches(Type type) => reflectType(type).isSubtypeOf(reflectType(List));
+  bool matches(Type type) => reflectType(type).isAssignableTo(reflectType(List));
 }
 
 
 class SetMapper extends Object with ConvertMapper<Set, List> {
   static final Symbol className = reflectClass(SetMapper).qualifiedName;
   final SchemaIndex index;
-  final Type coveredType = List;
+  final Mapper coveredMapper;
   
-  SetMapper(this.index);
+  SetMapper(SchemaIndex index)
+      : index = index,
+        coveredMapper = new ListMapper(index);
   
   List encode(Set element) => element.toList();
   Set decode(List element) => element.toSet();
   
   Symbol get name => className;
   
-  bool matches(Type type) => reflectType(type).isSubtypeOf(reflectType(Set));
+  bool matches(Type type) => reflectType(type).isAssignableTo(reflectType(Set));
 }
 
 
@@ -392,7 +409,7 @@ class MapMapper implements Mapper<Map> {
  
   Symbol get name => className;
   
-  bool matches(Type type) => reflectType(type).isSubtypeOf(reflectType(Map));
+  bool matches(Type type) => reflectType(type).isAssignableTo(reflectType(Map));
   
   Future<List<Map>> all() => index.getAdapter().then((adapter) {
     return adapter.where(str(name), {}).then((records) {
